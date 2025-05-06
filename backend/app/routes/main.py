@@ -1,9 +1,13 @@
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, abort
 import subprocess
 from flask import request
 from app.utils.req_modifier import modify_request, get_current_user
-from app.utils.hyperhdr_version_info import start_hyperhdr_service,stop_hyperhdr_service,status_hyperhdr_service,get_hyperhdr_version,fetch_github_versions
+from app.utils.hyperhdr_version_info import connect_wifi_nmcli, start_hyperhdr_service,stop_hyperhdr_service,status_hyperhdr_service,get_hyperhdr_version,fetch_github_versions
+from pydantic import BaseModel, SecretStr, ValidationError
 
+class WifiRequest(BaseModel):
+    ssid: str  # Wi-Fi network name (string)
+    password: str  #SecretStr  # Password (stored securely)
 
 main_bp = Blueprint('main', __name__)
 
@@ -55,3 +59,26 @@ def get_hyperhdr_versions():
         return jsonify(github_versions), 200
     except Exception as e:
         return jsonify({"error": f"Error checking status: {str(e)}"}), 500
+
+@main_bp.route("/connect-wifi", methods=["POST"])
+def connect_wifi():
+    if not request.is_json:
+        return jsonify({
+            "error": "Unsupported Media Type",
+            "details": "Content-Type must be application/json"
+        }), 415
+
+    try:
+        json_data = request.get_json()
+        
+        req = WifiRequest(**json_data)
+        res = connect_wifi_nmcli(req.ssid, req.password)
+        return jsonify({"success":"true", "details": f"Connected to Wi-Fi {req.ssid}"})
+
+    except ValidationError as e:
+        return jsonify({"success":"false", "error": "Invalid data", "details": str(e)}), 400
+    except subprocess.CalledProcessError as e:
+        return jsonify({"success":"false", "error": "Wi-Fi connection failed", "details": e.stderr}), 400
+    except Exception as e:
+        return jsonify({"success":"false", "error": "Server error", "details": str(e)}), 500
+

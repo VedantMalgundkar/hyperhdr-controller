@@ -4,8 +4,11 @@ import time
 import requests
 import subprocess
 from .hyperhdr_history import save_to_releases_json,load_from_releases_json
+from dotenv import load_dotenv
 
 load_dotenv()
+
+PAIRING_FLAG = "/home/pi/.paired"
 
 def fetch_github_versions():
     """Fetch HyperHDR releases from GitHub with version, description, and Raspberry Pi 64-bit .deb download link."""
@@ -136,3 +139,37 @@ def uninstall_current_hyper_hdr_service():
         return {"message": "Current hyperhdr unistalled successfully."}
     except subprocess.CalledProcessError as e:
         return {"error": f"Could not uninstall existing version: {e.stderr}"}
+
+def is_paired():
+    return os.path.exists(PAIRING_FLAG)
+
+def mark_paired():
+    with open(PAIRING_FLAG, "w") as f:
+        f.write(str(time.time()))
+
+def start_hotspot():
+    subprocess.run(["sudo", "systemctl", "start", "dnsmasq"], check=True)
+    subprocess.run(["sudo", "systemctl", "start", "hostapd"], check=True)
+
+def stop_hotspot():
+    subprocess.run(["sudo", "systemctl", "stop", "hostapd"], check=True)
+    subprocess.run(["sudo", "systemctl", "stop", "dnsmasq"], check=True)
+
+def connect_wifi_nmcli(ssid: str, password: str):
+    # Add or update the connection profile
+    subprocess.run([
+        "sudo", "nmcli", "connection", "add",
+        "type", "wifi",
+        "con-name", ssid,
+        "ssid", ssid,
+        "ifname", "wlan0",
+        "wifi-sec.key-mgmt", "wpa-psk",
+        "wifi-sec.psk", password,
+        "connection.autoconnect", "yes",  # Auto-reconnect on reboot
+        "--", "save", "yes"
+    ], check=True)
+
+    # Immediately activate the connection
+    subprocess.run([
+        "sudo", "nmcli", "connection", "up", ssid
+    ], check=True)
