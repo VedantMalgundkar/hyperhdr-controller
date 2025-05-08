@@ -147,15 +147,47 @@ def mark_paired():
     with open(PAIRING_FLAG, "w") as f:
         f.write(str(time.time()))
 
-def start_hotspot():
-    subprocess.run(["sudo", "systemctl", "start", "dnsmasq"], check=True)
-    subprocess.run(["sudo", "systemctl", "start", "hostapd"], check=True)
+def start_hotspot(ssid='Pi-Hotspot', password='raspberry123', interface='wlan0'):
+    try:
+        # Check if NetworkManager is active
+        subprocess.run(["nmcli", "general", "status"], check=True, stdout=subprocess.PIPE)
+
+        # Start the hotspot
+        result = subprocess.run(
+            ["sudo", "nmcli", "device", "wifi", "hotspot", f"ifname", interface, f"ssid", ssid, f"password", password],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        return {"status": "success", "output": result.stdout}
+    except subprocess.CalledProcessError as e:
+        return {"status": "error", "error": e.stderr}
 
 def stop_hotspot():
-    subprocess.run(["sudo", "systemctl", "stop", "hostapd"], check=True)
-    subprocess.run(["sudo", "systemctl", "stop", "dnsmasq"], check=True)
+    # try:
+        # Get list of active connections
+    result = subprocess.run(
+        ["sudo", "nmcli", "-t", "-f", "NAME,TYPE", "con", "show", "--active"],
+        check=True, stdout=subprocess.PIPE, text=True
+    )
+    active_connections = result.stdout.strip().split('\n')
 
-def connect_wifi_nmcli(ssid: str, password: str):
+    # Look for the Hotspot connection
+    for conn in active_connections:
+        name, conn_type = conn.split(':')
+        if conn_type == 'wifi' and name.lower() == 'hotspot':
+            # Bring down the hotspot connection
+            subprocess.run(["sudo", "nmcli", "con", "down", name], check=True)
+            return {"status": "success", "message": f"Hotspot '{name}' stopped."}
+
+    return {"status": "error", "message": "No active hotspot found."}
+
+    # except subprocess.CalledProcessError as e:
+    #     return {"status": "error", "error": e.stderr}
+
+
+def configure_wifi_nmcli(ssid: str, password: str):
     # Add or update the connection profile
     subprocess.run([
         "sudo", "nmcli", "connection", "add",
@@ -169,7 +201,54 @@ def connect_wifi_nmcli(ssid: str, password: str):
         "--", "save", "yes"
     ], check=True)
 
+
+def connect_wifi_nmcli(ssid:str):
     # Immediately activate the connection
     subprocess.run([
         "sudo", "nmcli", "connection", "up", ssid
     ], check=True)
+
+
+def install_if_missing(pkg):
+    import subprocess, os
+
+    try:
+        subprocess.run(['dpkg', '-s', pkg], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except subprocess.CalledProcessError:
+        subprocess.run(['sudo', 'apt', 'update'], check=True)
+        subprocess.run(['sudo', 'apt', 'install', '-y', pkg], check=True)
+
+    if pkg == 'dnsmasq':
+        dnsmasq_conf = '/etc/dnsmasq.conf'
+        content = """interface=wlan0
+dhcp-range=192.168.4.2,192.168.4.20,255.255.255.0,24h
+domain-needed
+bogus-priv
+"""
+        if not os.path.exists(dnsmasq_conf) or 'interface=wlan0' not in open(dnsmasq_conf).read():
+            subprocess.run(['sudo', 'tee', dnsmasq_conf], input=content.encode(), check=True)
+
+    elif pkg == 'hostapd':
+        hostapd_conf = '/etc/hostapd/hostapd.conf'
+        content = """interface=wlan0
+driver=nl80211
+ssid=PiHotspot
+hw_mode=g
+channel=6
+wmm_enabled=0
+macaddr_acl=0
+auth_algs=1
+ignore_broadcast_ssid=0
+wpa=2
+wpa_passphrase=raspberry123
+wpa_key_mgmt=WPA-PSK
+rsn_pairwise=CCMP
+"""
+        if not os.path.exists(hostapd_conf):
+            subprocess.run(['sudo', 'tee', hostapd_conf], input=content.encode(), check=True)
+
+        daemon_conf = f'DAEMON_CONF="{hostapd_conf}"\n'
+        subprocess.run(['sudo', 'tee', '/etc/default/hostapd'], input=daemon_conf.encode(), check=True)
+
+        # Unmask but do NOT enable on boot
+        subprocess.run(['sudo', 'systemctl', 'unmask', 'hostapd'], check=True)

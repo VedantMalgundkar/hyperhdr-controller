@@ -2,7 +2,7 @@ from flask import Blueprint, jsonify, abort
 import subprocess
 from flask import request
 from app.utils.req_modifier import modify_request, get_current_user
-from app.utils.hyperhdr_version_info import connect_wifi_nmcli, start_hyperhdr_service,stop_hyperhdr_service,status_hyperhdr_service,get_hyperhdr_version,fetch_github_versions
+from app.utils.hyperhdr_version_info import stop_hotspot, configure_wifi_nmcli, connect_wifi_nmcli, start_hyperhdr_service,stop_hyperhdr_service,status_hyperhdr_service,get_hyperhdr_version,fetch_github_versions
 from pydantic import BaseModel, SecretStr, ValidationError
 
 class WifiRequest(BaseModel):
@@ -72,7 +72,16 @@ def connect_wifi():
         json_data = request.get_json()
         
         req = WifiRequest(**json_data)
-        res = connect_wifi_nmcli(req.ssid, req.password)
+        res = configure_wifi_nmcli(req.ssid, req.password)
+
+        stop_hotspot()
+
+        print("\n  hotspot stopped >>>>>>>>>> \n")
+
+        connect_wifi_nmcli(req.ssid)
+
+        print(f"\n  connected to {req.ssid} >>>>>>>>>> \n")
+
         return jsonify({"success":"true", "details": f"Connected to Wi-Fi {req.ssid}"})
 
     except ValidationError as e:
