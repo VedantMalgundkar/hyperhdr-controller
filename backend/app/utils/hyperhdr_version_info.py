@@ -209,46 +209,26 @@ def connect_wifi_nmcli(ssid:str):
     ], check=True)
 
 
-def install_if_missing(pkg):
-    import subprocess, os
+def scan_wifi_around():
+    output = subprocess.check_output(
+            ["nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY", "dev", "wifi", "list"]
+        ).decode("utf-8")
 
-    try:
-        subprocess.run(['dpkg', '-s', pkg], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except subprocess.CalledProcessError:
-        subprocess.run(['sudo', 'apt', 'update'], check=True)
-        subprocess.run(['sudo', 'apt', 'install', '-y', pkg], check=True)
+    networks = []
+    pattern = re.compile(r'^(.*?):(\d+):?(.*)?$')
 
-    if pkg == 'dnsmasq':
-        dnsmasq_conf = '/etc/dnsmasq.conf'
-        content = """interface=wlan0
-dhcp-range=192.168.4.2,192.168.4.20,255.255.255.0,24h
-domain-needed
-bogus-priv
-"""
-        if not os.path.exists(dnsmasq_conf) or 'interface=wlan0' not in open(dnsmasq_conf).read():
-            subprocess.run(['sudo', 'tee', dnsmasq_conf], input=content.encode(), check=True)
+    for line in output.strip().split('\n'):
+        match = pattern.match(line.strip())
+        if match:
+            ssid = match.group(1).strip()
+            signal = int(match.group(2).strip())
+            security = match.group(3).strip() if match.group(3) else "OPEN"
 
-    elif pkg == 'hostapd':
-        hostapd_conf = '/etc/hostapd/hostapd.conf'
-        content = """interface=wlan0
-driver=nl80211
-ssid=PiHotspot
-hw_mode=g
-channel=6
-wmm_enabled=0
-macaddr_acl=0
-auth_algs=1
-ignore_broadcast_ssid=0
-wpa=2
-wpa_passphrase=raspberry123
-wpa_key_mgmt=WPA-PSK
-rsn_pairwise=CCMP
-"""
-        if not os.path.exists(hostapd_conf):
-            subprocess.run(['sudo', 'tee', hostapd_conf], input=content.encode(), check=True)
-
-        daemon_conf = f'DAEMON_CONF="{hostapd_conf}"\n'
-        subprocess.run(['sudo', 'tee', '/etc/default/hostapd'], input=daemon_conf.encode(), check=True)
-
-        # Unmask but do NOT enable on boot
-        subprocess.run(['sudo', 'systemctl', 'unmask', 'hostapd'], check=True)
+            if ssid:  # skip hidden/empty SSIDs
+                networks.append({
+                    "ssid": ssid,
+                    "signal": signal,
+                    "security": security or "OPEN"
+                })
+                
+    return networks

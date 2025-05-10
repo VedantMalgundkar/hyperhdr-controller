@@ -2,7 +2,7 @@ from flask import Blueprint, jsonify, abort
 import subprocess
 from flask import request
 from app.utils.req_modifier import modify_request, get_current_user
-from app.utils.hyperhdr_version_info import stop_hotspot, configure_wifi_nmcli, connect_wifi_nmcli, start_hyperhdr_service,stop_hyperhdr_service,status_hyperhdr_service,get_hyperhdr_version,fetch_github_versions
+from app.utils.hyperhdr_version_info import scan_wifi_around, stop_hotspot, configure_wifi_nmcli, connect_wifi_nmcli, start_hyperhdr_service,stop_hyperhdr_service,status_hyperhdr_service,get_hyperhdr_version,fetch_github_versions
 from pydantic import BaseModel, SecretStr, ValidationError
 
 class WifiRequest(BaseModel):
@@ -86,6 +86,17 @@ def connect_wifi():
 
     except ValidationError as e:
         return jsonify({"success":"false", "error": "Invalid data", "details": str(e)}), 400
+    except subprocess.CalledProcessError as e:
+        return jsonify({"success":"false", "error": "Wi-Fi connection failed", "details": e.stderr}), 400
+    except Exception as e:
+        return jsonify({"success":"false", "error": "Server error", "details": str(e)}), 500
+
+@main_bp.route("/scan-wifi", methods=["GET"])
+def scan_wifi():
+    try:
+        available_network = scan_wifi_around()
+        return jsonify({"success":"true", "networks": available_network})
+
     except subprocess.CalledProcessError as e:
         return jsonify({"success":"false", "error": "Wi-Fi connection failed", "details": e.stderr}), 400
     except Exception as e:
