@@ -2,7 +2,7 @@ from flask import Blueprint, jsonify, abort
 import subprocess
 from flask import request
 from app.utils.req_modifier import modify_request, get_current_user
-from app.utils.hyperhdr_version_info import scan_wifi_around, stop_hotspot, configure_wifi_nmcli, connect_wifi_nmcli, start_hyperhdr_service,stop_hyperhdr_service,status_hyperhdr_service,get_hyperhdr_version,fetch_github_versions
+from app.utils.hyperhdr_version_info import scan_wifi_around, stop_hotspot, start_hotspot, configure_wifi_nmcli, connect_wifi_nmcli, start_hyperhdr_service,stop_hyperhdr_service,status_hyperhdr_service,get_hyperhdr_version,fetch_github_versions
 from pydantic import BaseModel, SecretStr, ValidationError
 
 class WifiRequest(BaseModel):
@@ -96,6 +96,34 @@ def scan_wifi():
     try:
         available_network = scan_wifi_around()
         return jsonify({"success":"true", "networks": available_network})
+
+    except subprocess.CalledProcessError as e:
+        return jsonify({"success":"false", "error": "Wi-Fi connection failed", "details": e.stderr}), 400
+    except Exception as e:
+        return jsonify({"success":"false", "error": "Server error", "details": str(e)}), 500
+
+@main_bp.route("/start-hostspot", methods=["POST"])
+def start_pi_hotspot():
+    try:
+        res = start_hotspot()
+        if res['status'] != "success":
+            return jsonify(res),500
+        
+        return jsonify(res),200
+
+    except subprocess.CalledProcessError as e:
+        return jsonify({"success":"false", "error": "Wi-Fi connection failed", "details": e.stderr}), 400
+    except Exception as e:
+        return jsonify({"success":"false", "error": "Server error", "details": str(e)}), 500
+
+@main_bp.route("/stop-hostspot", methods=["POST"])
+def stop_pi_hotspot():
+    try:
+        res = stop_hotspot()
+        if res['status'] != "success":
+            return jsonify(res),404
+
+        return jsonify(res),200
 
     except subprocess.CalledProcessError as e:
         return jsonify({"success":"false", "error": "Wi-Fi connection failed", "details": e.stderr}), 400

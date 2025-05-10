@@ -165,8 +165,7 @@ def start_hotspot(ssid='Pi-Hotspot', password='raspberry123', interface='wlan0')
         return {"status": "error", "error": e.stderr}
 
 def stop_hotspot():
-    # try:
-        # Get list of active connections
+    # Get list of active connections
     result = subprocess.run(
         ["sudo", "nmcli", "-t", "-f", "NAME,TYPE", "con", "show", "--active"],
         check=True, stdout=subprocess.PIPE, text=True
@@ -176,16 +175,12 @@ def stop_hotspot():
     # Look for the Hotspot connection
     for conn in active_connections:
         name, conn_type = conn.split(':')
-        if conn_type == 'wifi' and name.lower() == 'hotspot':
+        if name.lower() == 'hotspot':
             # Bring down the hotspot connection
             subprocess.run(["sudo", "nmcli", "con", "down", name], check=True)
             return {"status": "success", "message": f"Hotspot '{name}' stopped."}
 
     return {"status": "error", "message": "No active hotspot found."}
-
-    # except subprocess.CalledProcessError as e:
-    #     return {"status": "error", "error": e.stderr}
-
 
 def configure_wifi_nmcli(ssid: str, password: str):
     # Add or update the connection profile
