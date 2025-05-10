@@ -72,73 +72,50 @@ def fetch_github_versions():
 
 
 def get_hyperhdr_version():
-    try:
-        result = subprocess.run(
-            ["hyperhdr", "--version"],
-            capture_output=True,
-            text=True,
-            check=True
-        )
-        full_output = result.stdout.strip()
+    result = subprocess.run(
+        ["hyperhdr", "--version"],
+        capture_output=True,
+        text=True,
+        check=True
+    )
+    full_output = result.stdout.strip()
 
-        # Extract version using regex
-        version_match = re.search(r"Version\s*:\s*([\d.]+)", full_output)
-        version = version_match.group(1) if version_match else None
+    # Extract version using regex
+    version_match = re.search(r"Version\s*:\s*([\d.]+)", full_output)
+    version = version_match.group(1) if version_match else None
 
-        return {
-            "version": version,
-            "output": full_output
-        }
-    except subprocess.CalledProcessError as e:
-        return {
-            "version": None,
-            "output": e.stderr.strip() if e.stderr else "Failed to get version"
-        }
-    except FileNotFoundError:
-        return {
-            "version": None,
-            "output": "HyperHDR is not installed or not in PATH"
-        }
+    return {
+        "version": version,
+        "output": full_output
+    }
 
 def start_hyperhdr_service(username):
-    try:
-        result = subprocess.run(
-            ["sudo", "systemctl", "start", f"hyperhdr@{username}.service"], 
-            capture_output=True, text=True
-        )
-        return {"message": "Service started successfully."}
-    except subprocess.CalledProcessError as e:
-        return {"error": f"Error checking status: {str(e)}"}
+    result = subprocess.run(
+        ["sudo", "systemctl", "start", f"hyperhdr@{username}.service"], 
+        capture_output=True, text=True
+    )
+    return {"status":"success", "message": "Service started successfully."}
 
 def stop_hyperhdr_service(username):
-    try:
-        subprocess.run(["sudo", "systemctl", "stop", f"hyperhdr@{username}.service"], check=True)
-        return {"message": "Service stopped successfully."}
-    except subprocess.CalledProcessError as e:
-        return {"error": f"Failed to stop service: {str(e)}"}
+    subprocess.run(["sudo", "systemctl", "stop", f"hyperhdr@{username}.service"], check=True)
+    return {"status":"success","message": "Service stopped successfully."}
 
 def status_hyperhdr_service(username):
-    try:
-        result = subprocess.run(
-            ["sudo", "systemctl", "is-active", f"hyperhdr@{username}.service"], 
-            capture_output=True, text=True
-        )
-        status = result.stdout.strip()
-        return {"status": status}
-    except subprocess.CalledProcessError as e:
-        return {"error": f"Error checking status: {str(e)}"}
+    result = subprocess.run(
+        ["sudo", "systemctl", "is-active", f"hyperhdr@{username}.service"], 
+        capture_output=True, text=True
+    )
+    status = result.stdout.strip()
+    return {"status": "success","hyperhdr_status":status}
 
 def uninstall_current_hyper_hdr_service():
-    try:
-        subprocess.run(
-            ["sudo", "dpkg", "-r", "hyperhdr"],
-            check=True,
-            capture_output=True,
-            text=True
-        )
-        return {"message": "Current hyperhdr unistalled successfully."}
-    except subprocess.CalledProcessError as e:
-        return {"error": f"Could not uninstall existing version: {e.stderr}"}
+    subprocess.run(
+        ["sudo", "dpkg", "-r", "hyperhdr"],
+        check=True,
+        capture_output=True,
+        text=True
+    )
+    return {"status":"success", "message": "Current hyperhdr unistalled successfully."}
 
 def is_paired():
     return os.path.exists(PAIRING_FLAG)

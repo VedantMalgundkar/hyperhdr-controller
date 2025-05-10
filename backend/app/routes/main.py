@@ -14,30 +14,56 @@ main_bp = Blueprint('main', __name__)
 @main_bp.route('/start-hyperhdr', methods=['POST'])
 @modify_request(add_data={"user": get_current_user()})
 def start_hyperhdr():
-    username = request.custom_data['user']
-    res = start_hyperhdr_service(username)
-    if res.get('error'):
-        return jsonify(res),500
-    return jsonify(res),200
-
+    try:
+        username = request.custom_data['user']
+        res = start_hyperhdr_service(username)
+        return jsonify(res),200
+    except subprocess.CalledProcessError as e:
+        return jsonify({
+                "status":"failed", 
+                "error": f"command failed : {str(e)}"
+            }), 500
+    except Exception as e:     
+        return jsonify({
+                "status":"failed", 
+                "error": f"Unexpected error: {str(e)}"
+            }), 500
 
 @main_bp.route('/stop-hyperhdr', methods=['POST'])
 @modify_request(add_data={"user": get_current_user()})
 def stop_hyperhdr():
-    username = request.custom_data['user']
-    res = stop_hyperhdr_service(username)
-    if res.get('error'):
-        return jsonify(res),500
-    return jsonify(res),200
+    try:
+        username = request.custom_data['user']
+        res = stop_hyperhdr_service(username)
+        return jsonify(res),200
+    except subprocess.CalledProcessError as e:
+        return jsonify({
+                "status":"failed", 
+                "error": f"command failed : {str(e)}"
+            }), 500
+    except Exception as e:     
+        return jsonify({
+                "status":"failed", 
+                "error": f"Unexpected error: {str(e)}"
+            }), 500
 
 @main_bp.route('/status-hyperhdr', methods=['GET'])
 @modify_request(add_data={"user": get_current_user()})
 def status_hyperhdr():
-    username = request.custom_data['user']
-    res = status_hyperhdr_service(username)
-    if res.get('error'):
-        return jsonify(res),500
-    return jsonify(res),200
+    try:
+        username = request.custom_data['user']
+        res = status_hyperhdr_service(username)
+        return jsonify(res),200
+    except subprocess.CalledProcessError as e:
+        return jsonify({
+                "status":"failed", 
+                "error": f"command failed : {str(e)}"
+            }), 500
+    except Exception as e:     
+        return jsonify({
+                "status":"failed", 
+                "error": f"Unexpected error: {str(e)}"
+            }), 500
 
 @main_bp.route("/hyperhdr/current-version", methods=["GET"])
 def get_current_hyperhdr_version():

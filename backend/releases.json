@@ -9,7 +9,7 @@
                 {
                     "name": "HyperHDR-21.0.0.0-Linux-aarch64.deb",
                     "size": 12804660,
-                    "download_count": 471,
+                    "download_count": 516,
                     "browser_download_url": "https://github.com/awawa-dev/HyperHDR/releases/download/v21.0.0.0/HyperHDR-21.0.0.0-Linux-aarch64.deb",
                     "created_at": "2025-03-09T10:39:51Z",
                     "updated_at": "2025-03-09T10:39:52Z"
@@ -17,7 +17,7 @@
                 {
                     "name": "HyperHDR-21.0.0.0.bookworm-aarch64.deb",
                     "size": 13447824,
-                    "download_count": 73,
+                    "download_count": 77,
                     "browser_download_url": "https://github.com/awawa-dev/HyperHDR/releases/download/v21.0.0.0/HyperHDR-21.0.0.0.bookworm-aarch64.deb",
                     "created_at": "2025-03-09T10:39:51Z",
                     "updated_at": "2025-03-09T10:39:52Z"
@@ -33,7 +33,7 @@
                 {
                     "name": "HyperHDR-20.0.0.0-Linux-aarch64.deb",
                     "size": 32639248,
-                    "download_count": 2841,
+                    "download_count": 2848,
                     "browser_download_url": "https://github.com/awawa-dev/HyperHDR/releases/download/v20.0.0.0/HyperHDR-20.0.0.0-Linux-aarch64.deb",
                     "created_at": "2024-03-24T00:03:55Z",
                     "updated_at": "2024-03-24T00:03:57Z"
@@ -41,7 +41,7 @@
                 {
                     "name": "HyperHDR-20.0.0.0.bookworm-aarch64.deb",
                     "size": 34121958,
-                    "download_count": 217,
+                    "download_count": 219,
                     "browser_download_url": "https://github.com/awawa-dev/HyperHDR/releases/download/v20.0.0.0/HyperHDR-20.0.0.0.bookworm-aarch64.deb",
                     "created_at": "2024-03-24T00:03:55Z",
                     "updated_at": "2024-03-24T00:03:57Z"
@@ -57,7 +57,7 @@
                 {
                     "name": "HyperHDR-19.0.0.0-Linux-aarch64.deb",
                     "size": 33306056,
-                    "download_count": 3093,
+                    "download_count": 3098,
                     "browser_download_url": "https://github.com/awawa-dev/HyperHDR/releases/download/v19.0.0.0/HyperHDR-19.0.0.0-Linux-aarch64.deb",
                     "created_at": "2023-02-12T18:21:19Z",
                     "updated_at": "2023-02-12T18:21:22Z"
@@ -89,7 +89,7 @@
                 {
                     "name": "HyperHDR-17.0.0.0-Linux-aarch64.deb",
                     "size": 32800546,
-                    "download_count": 2211,
+                    "download_count": 2216,
                     "browser_download_url": "https://github.com/awawa-dev/HyperHDR/releases/download/v17.0.0.0/HyperHDR-17.0.0.0-Linux-aarch64.deb",
                     "created_at": "2021-09-15T17:13:22Z",
                     "updated_at": "2021-09-15T17:13:25Z"
@@ -97,5 +97,5 @@
             ]
         }
     ],
-    "created_at": 1746286305.9003057
+    "created_at": 1746898414.7578292
 }
