@@ -169,16 +169,19 @@ def configure_wifi_nmcli(ssid: str, password: str):
         "ifname", "wlan0",
         "wifi-sec.key-mgmt", "wpa-psk",
         "wifi-sec.psk", password,
-        "connection.autoconnect", "yes",  # Auto-reconnect on reboot
+        "connection.autoconnect", "yes",
         "--", "save", "yes"
-    ], check=True)
+    ], capture_output=True, text=True, check=True)
 
 
 def connect_wifi_nmcli(ssid:str):
     # Immediately activate the connection
-    subprocess.run([
-        "sudo", "nmcli", "connection", "up", ssid
-    ], check=True)
+    try:
+        return subprocess.run([
+            "sudo", "nmcli", "connection", "up", ssid
+        ], check=True)
+    except subprocess.CalledProcessError as e:
+        return {"status":"failed", "error": "Wi-Fi connection failed", "details": e.stderr}
 
 
 def scan_wifi_around():

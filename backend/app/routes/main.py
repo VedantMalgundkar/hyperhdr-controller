@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify, abort
 import subprocess
 from flask import request
+from werkzeug.exceptions import HTTPException, Unauthorized
 from app.utils.req_modifier import modify_request, get_current_user
 from app.utils.hyperhdr_version_info import scan_wifi_around, stop_hotspot, start_hotspot, configure_wifi_nmcli, connect_wifi_nmcli, start_hyperhdr_service,stop_hyperhdr_service,status_hyperhdr_service,get_hyperhdr_version,fetch_github_versions
 from pydantic import BaseModel, SecretStr, ValidationError
@@ -98,24 +99,37 @@ def connect_wifi():
         json_data = request.get_json()
         
         req = WifiRequest(**json_data)
+        print(req.ssid,"|",req.password)
         res = configure_wifi_nmcli(req.ssid, req.password)
 
         stop_hotspot()
 
-        print("\n  hotspot stopped >>>>>>>>>> \n")
-
-        connect_wifi_nmcli(req.ssid)
-
+        res = connect_wifi_nmcli(req.ssid)
+        if res.get('status') and res.get('status') == "failed":
+            print(res)
+            raise Unauthorized("Invalid wifi password")
+        
         print(f"\n  connected to {req.ssid} >>>>>>>>>> \n")
 
         return jsonify({"success":"true", "details": f"Connected to Wi-Fi {req.ssid}"})
 
     except ValidationError as e:
+        start_hotspot()
+        print("hotspot restarted 1 >>>\n")
         return jsonify({"success":"false", "error": "Invalid data", "details": str(e)}), 400
+    except HTTPException as e:
+        print("hotspot restarted 2 >>>\n")
+        start_hotspot()
+        return jsonify({"status":"failed", "error": e.description}), e.code
     except subprocess.CalledProcessError as e:
+        print("hotspot restarted 3 >>>\n")
+        start_hotspot()
         return jsonify({"success":"false", "error": "Wi-Fi connection failed", "details": e.stderr}), 400
     except Exception as e:
+        print("hotspot restarted 4 >>>\n")
+        start_hotspot()
         return jsonify({"success":"false", "error": "Server error", "details": str(e)}), 500
+    
 
 @main_bp.route("/scan-wifi", methods=["GET"])
 def scan_wifi():

@@ -19,12 +19,8 @@ def health_check():
     ), 200
 
 if __name__ == '__main__':
-    # if not is_paired():
-        # install_if_missing("dnsmasq")
-        # print("\n  installed dnsmasq >>>>>>>>>> \n")
-        # install_if_missing("hostapd")
-        # print("\n  installed hostapd >>>>>>>>>> \n")
-        # start_hotspot()
-        # print("\n  started hotspot >>>>>>>>>> \n")
+    if not is_paired():
+        start_hotspot()
+        print("\n  started hotspot >>>>>>>>>> \n")
 
-    app.run(host='0.0.0.0', port=5000, debug=True )
+    app.run(host='0.0.0.0', port=5000, debug=False )
