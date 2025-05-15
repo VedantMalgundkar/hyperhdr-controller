@@ -25,6 +25,7 @@ import dbus
 import re
 import subprocess
 import json
+import threading
 from advertisement import Advertisement
 from service import Application, Service, Characteristic, Descriptor
 
@@ -175,15 +176,44 @@ class ScanWifiDescriptor(Descriptor):
 
         return value
 
+class BLEServer:
+    def __init__(self):
+        self.app = Application()
+        self.app.add_service(WifiScanningService(0))
+        self.adv = WifiAdvertisement(0)
+        self.running = False
+        self.thread = None
 
-app = Application()
-app.add_service(WifiScanningService(0))
-app.register()
+    def run_ble(self):
+        self.app.register()
+        self.adv.register()
+        self.running = True
+        try:
+            self.app.run()
+        except Exception as e:
+            print("BLE stopped:", str(e))
 
-adv = WifiAdvertisement(0)
-adv.register()
+    def start(self):
+        if not self.running:
+            self.thread = threading.Thread(target=self.run_ble)
+            self.thread.daemon = True
+            self.thread.start()
 
-try:
-    app.run()
-except KeyboardInterrupt:
-    app.quit()
+    def stop(self):
+        if self.running:
+            self.app.quit()
+            self.running = False
+
+
+if __name__ == "__main__":
+    app = Application()
+    app.add_service(WifiScanningService(0))
+    app.register()
+
+    adv = WifiAdvertisement(0)
+    adv.register()
+
+    try:
+        app.run()
+    except KeyboardInterrupt:
+        app.quit()
