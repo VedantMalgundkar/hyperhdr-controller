@@ -6,6 +6,11 @@ import subprocess
 from .hyperhdr_history import save_to_releases_json,load_from_releases_json
 from dotenv import load_dotenv
 
+ble_process = None
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+wifi_util_path = os.path.join(BASE_DIR, "wifi_module", "wifi_utilities.py")
+
 load_dotenv()
 
 PAIRING_FLAG = "/home/pi/.paired"
@@ -207,3 +212,18 @@ def scan_wifi_around():
                 })
                 
     return networks
+
+def start_ble_service():
+    global ble_process
+    if ble_process is None or ble_process.poll() is not None:
+        ble_process = subprocess.Popen(["/usr/bin/python3", wifi_util_path])
+        return {"success":"true","message":"Ble started successfully."}
+    return {"success":"true", "message":"BLE already running"}
+
+def stop_ble_service():
+    global ble_process
+    if ble_process and ble_process.poll() is None:
+        ble_process.terminate()
+        ble_process = None
+        return {"success":"true","message":"Ble stopped successfully."}
+    return {"success":"true", "message":"BLE is not running"}

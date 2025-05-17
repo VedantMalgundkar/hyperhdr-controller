@@ -3,7 +3,7 @@ import subprocess
 from flask import request
 from werkzeug.exceptions import HTTPException, Unauthorized
 from app.utils.req_modifier import modify_request, get_current_user
-from app.utils.hyperhdr_version_info import scan_wifi_around, stop_hotspot, start_hotspot, configure_wifi_nmcli, connect_wifi_nmcli, start_hyperhdr_service,stop_hyperhdr_service,status_hyperhdr_service,get_hyperhdr_version,fetch_github_versions
+from app.utils.hyperhdr_version_info import start_ble_service, stop_ble_service, scan_wifi_around, stop_hotspot, start_hotspot, configure_wifi_nmcli, connect_wifi_nmcli, start_hyperhdr_service,stop_hyperhdr_service,status_hyperhdr_service,get_hyperhdr_version,fetch_github_versions
 from pydantic import BaseModel, SecretStr, ValidationError
 
 class WifiRequest(BaseModel):
@@ -170,3 +170,27 @@ def stop_pi_hotspot():
     except Exception as e:
         return jsonify({"success":"false", "error": "Server error", "details": str(e)}), 500
 
+
+@main_bp.route('/start-ble',methods=["POST"])
+def start_ble():
+    try:
+        res = start_ble_service()
+        if res["success"]=="true" and "started" in res["message"]:
+            return jsonify(res), 200
+        return jsonify(res), 429
+    except subprocess.CalledProcessError as e:
+        return jsonify({"success":"false", "error": "sudo command failed", "details": e.stderr}), 500
+    except Exception as e:
+        return jsonify({"success":"false", "error": "somthing went wrong","details": str(e)}), 500
+
+@main_bp.route('/stop-ble',methods=["POST"])
+def stop_ble():
+    try:
+        res = stop_ble_service()
+        if res["success"]=="true" and "stopped" in res["message"]:
+            return jsonify(res), 200
+        return jsonify(res), 429
+    except subprocess.CalledProcessError as e:
+        return jsonify({"success":"false", "error": "sudo command failed", "details": e.stderr}), 500
+    except Exception as e:
+        return jsonify({"success":"false", "error": "somthing went wrong", "details": str(e)}), 500
