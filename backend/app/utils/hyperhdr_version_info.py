@@ -18,6 +18,15 @@ load_dotenv()
 
 PAIRING_FLAG = "/home/pi/.paired"
 
+def _get_service_status(service_name):
+    result = subprocess.run(
+        ["sudo", "systemctl", "is-active", service_name],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True
+    )
+    return result.stdout.strip()
+
 def fetch_github_versions():
     """Fetch HyperHDR releases from GitHub with version, description, and Raspberry Pi 64-bit .deb download link."""
     
@@ -109,12 +118,8 @@ def stop_hyperhdr_service(username):
     return {"status":"success","message": "Service stopped successfully."}
 
 def status_hyperhdr_service(username):
-    result = subprocess.run(
-        ["sudo", "systemctl", "is-active", f"hyperhdr@{username}.service"], 
-        capture_output=True, text=True
-    )
-    status = result.stdout.strip()
-    return {"status": "success","hyperhdr_status":status, "message": "Fetched hyperhdr status successfully"}
+    result = _get_service_status(f"hyperhdr@{username}.service")
+    return {"status": "success","hyperhdr_status": result, "message": "Fetched hyperhdr status successfully"}
 
 def uninstall_current_hyper_hdr_service():
     subprocess.run(
@@ -221,64 +226,58 @@ def scan_wifi_around():
 
     return {"status":"success", "message":"Network fetched successfully", "networks": networks}
 
+def is_ble_active():
+    ble_status = _get_service_status('auto_pair_agent.service')
+    wifi_status = _get_service_status('wifi_utilities.service')
 
-# def start_ble_service():
-#     global ble_process, agent_process
-#     if ble_process is None or ble_process.poll() is not None:
-#         agent_process = subprocess.Popen(["/usr/bin/python3", ble_auto_pairing_path])
-#         ble_process = subprocess.Popen(["/usr/bin/python3", wifi_util_path])
-#         return {"status":"success", "message": "BLE started successfully."}
-#     return {"status":"success", "message": "BLE already running"}
-
-# def stop_ble_service():
-#     global ble_process, agent_process
-#     if ble_process and ble_process.poll() is None:
-#         if agent_process and agent_process.poll() is None:
-#             agent_process.terminate()
-#             agent_process = None
-#         ble_process.terminate()
-#         ble_process = None
-#         return {"status":"success", "message": "BLE stopped successfully."}
-#     return {"status":"success", "message": "BLE is not running"}
-
-def find_process_by_script(script_path):
-    """Return a list of psutil.Process objects matching the script path."""
-    matching = []
-    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
-        try:
-            cmdline = proc.info['cmdline']
-            if cmdline and script_path in ' '.join(cmdline):
-                matching.append(proc)
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            continue
-    return matching
+    if ble_status == "active" and wifi_status == "active":
+        return {
+            "status": "success",
+            "ble_status": "active",
+            "message": "BLE services are running."
+        }
+    else:
+        return {
+            "status": "success",
+            "ble_status": "inactive",
+            "message": "One or both BLE services are not running.",
+            "details": {
+                "auto_pair_agent": ble_status,
+                "wifi_utilities": wifi_status
+            }
+        }
 
 def start_ble_service():
-    wifi_processes = find_process_by_script(wifi_util_path)
-    agent_processes = find_process_by_script(ble_auto_pairing_path)
+    res = is_ble_active()
+    if res["ble_status"] == "active":
+        return {
+            "status": "success",
+            "message": "BLE services already running."
+        }
 
-    if not wifi_processes:
-        subprocess.Popen(["/usr/bin/python3", ble_auto_pairing_path])
-        subprocess.Popen(["/usr/bin/python3", wifi_util_path])
-        return {"status": "success", "message": "BLE started successfully."}
-    else:
-        return {"status": "success", "message": "BLE already running."}
-
-def stop_ble_service():
-    stopped_any = False
-
-    for proc in find_process_by_script(wifi_util_path) + find_process_by_script(ble_auto_pairing_path):
-        try:
-            proc.terminate()
-            stopped_any = True
-        except Exception as e:
-            return {"status": "error", "message": f"Failed to stop BLE: {e}"}
+    subprocess.run(['sudo', 'systemctl', 'start', 'auto_pair_agent.service'])
+    subprocess.run(['sudo', 'systemctl', 'start', 'wifi_utilities.service'])
 
     return {
         "status": "success",
-        "message": "BLE stopped successfully." if stopped_any else "BLE is not running."
+        "message": "BLE services started successfully."
     }
 
+def stop_ble_service():
+    res = is_ble_active()
+    if res["ble_status"] != "active":
+        return {
+            "status": "success",
+            "message": "BLE services are already stopped."
+        }
+
+    subprocess.run(['sudo', 'systemctl', 'stop', 'wifi_utilities.service'])
+    subprocess.run(['sudo', 'systemctl', 'stop', 'auto_pair_agent.service'])
+
+    return {
+        "status": "success",
+        "message": "BLE services stopped successfully."
+    }
 
 def reset_service():
     subprocess.run(
