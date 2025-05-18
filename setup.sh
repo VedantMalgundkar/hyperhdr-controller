@@ -63,7 +63,7 @@ Description=BLE Auto Pair Agent
 After=network.target
 
 [Service]
-ExecStart=$PYTHON $PROJECT_DIR/backend/ble/auto_pair_agent.py
+ExecStart=/usr/bin/python3 $PROJECT_DIR/backend/ble/auto_pair_agent.py
 Restart=always
 User=$USER_NAME
 WorkingDirectory=$PROJECT_DIR
@@ -81,7 +81,7 @@ After=network.target auto_pair_agent.service
 Requires=auto_pair_agent.service
 
 [Service]
-ExecStart=$PYTHON $PROJECT_DIR/backend/wifi_module/wifi_utilities.py
+ExecStart=/usr/bin/python3 $PROJECT_DIR/backend/wifi_module/wifi_utilities.py
 Restart=always
 User=$USER_NAME
 WorkingDirectory=$PROJECT_DIR
