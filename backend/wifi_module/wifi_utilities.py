@@ -35,7 +35,7 @@ GATT_CHRC_IFACE = "org.bluez.GattCharacteristic1"
 class WifiAdvertisement(Advertisement):
     def __init__(self, index):
         Advertisement.__init__(self, index, "peripheral")
-        self.add_local_name("Wifi Scanner")
+        self.add_local_name("Wifi Setup")
         self.include_tx_power = True
 
 class WifiScanningService(Service):
@@ -77,29 +77,32 @@ class ScanWifiCharacteristic(Characteristic):
             "sudo", "nmcli", "connection", "up", ssid
         ], check=True)
         
-
     def get_nearby_wifi(self):
         output = subprocess.check_output(
-                ["nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY", "dev", "wifi", "list"]
-            ).decode("utf-8")
+            ["sudo", "nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY,IN-USE", "dev", "wifi", "list"]
+        ).decode("utf-8")
 
         networks = []
-        pattern = re.compile(r'^(.*?):(\d+):?(.*)?$')
+        pattern = re.compile(r'^(.*?):(\d+):([^:]*):?(.*)?$')
 
         for line in output.strip().split('\n'):
             match = pattern.match(line.strip())
             if match:
                 ssid = match.group(1).strip()
                 signal = int(match.group(2).strip())
-                security = match.group(3).strip() if match.group(3) else "OPEN"
+                security = match.group(3).strip() or "OPEN"
+                in_use_field = match.group(4).strip()
+                in_use = True if in_use_field == '*' else False
 
-                if ssid:
+                if ssid:  # skip hidden/empty SSIDs
                     networks.append({
                         "ssid": ssid,
                         "signal": signal,
-                        "security": security or "OPEN"
+                        "security": security,
+                        "in_use": in_use
                     })
 
+        networks = sorted(networks,key=lambda x:x["in_use"],reverse=True)
         json_str = json.dumps(networks)
         value = [dbus.Byte(b) for b in json_str.encode("utf-8")]
                     
@@ -158,7 +161,7 @@ class WifiStatusCharacteristic(Characteristic):
         return self.value
 
 class ScanWifiDescriptor(Descriptor):
-    WIFI_DESCRIPTOR_UUID = "2902"
+    WIFI_DESCRIPTOR_UUID = "2901"
     WIFI_DESCRIPTOR_VALUE = "Scans nearby wifi networks"
 
     def __init__(self, characteristic):

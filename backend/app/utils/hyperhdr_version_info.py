@@ -6,10 +6,12 @@ import subprocess
 from .hyperhdr_history import save_to_releases_json,load_from_releases_json
 from dotenv import load_dotenv
 
+agent_process = None
 ble_process = None
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 wifi_util_path = os.path.join(BASE_DIR, "wifi_module", "wifi_utilities.py")
+ble_auto_pairing_path = os.path.join(BASE_DIR, "ble", "auto_pair_agent.py")
 
 load_dotenv()
 
@@ -191,39 +193,49 @@ def connect_wifi_nmcli(ssid:str):
 
 def scan_wifi_around():
     output = subprocess.check_output(
-            ["nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY", "dev", "wifi", "list"]
-        ).decode("utf-8")
+        ["sudo", "nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY,IN-USE", "dev", "wifi", "list"]
+    ).decode("utf-8")
 
     networks = []
-    pattern = re.compile(r'^(.*?):(\d+):?(.*)?$')
+    pattern = re.compile(r'^(.*?):(\d+):([^:]*):?(.*)?$')
 
     for line in output.strip().split('\n'):
         match = pattern.match(line.strip())
         if match:
             ssid = match.group(1).strip()
             signal = int(match.group(2).strip())
-            security = match.group(3).strip() if match.group(3) else "OPEN"
+            security = match.group(3).strip() or "OPEN"
+            in_use_field = match.group(4).strip()
+            in_use = True if in_use_field == '*' else False
 
             if ssid:  # skip hidden/empty SSIDs
                 networks.append({
                     "ssid": ssid,
                     "signal": signal,
-                    "security": security or "OPEN"
+                    "security": security,
+                    "in_use": in_use
                 })
-                
+
+    networks = sorted(networks,key=lambda x:x["in_use"],reverse=True)
+
     return networks
 
+
 def start_ble_service():
-    global ble_process
+    global ble_process, agent_process
     if ble_process is None or ble_process.poll() is not None:
+        agent_process = subprocess.Popen(["/usr/bin/python3", ble_auto_pairing_path])
         ble_process = subprocess.Popen(["/usr/bin/python3", wifi_util_path])
-        return {"success":"true","message":"Ble started successfully."}
-    return {"success":"true", "message":"BLE already running"}
+        return {"success": "true", "message": "BLE started successfully."}
+    return {"success": "true", "message": "BLE already running"}
 
 def stop_ble_service():
-    global ble_process
+    global ble_process, agent_process
     if ble_process and ble_process.poll() is None:
+        if agent_process and agent_process.poll() is None:
+            agent_process.terminate()
+            agent_process = None
         ble_process.terminate()
         ble_process = None
-        return {"success":"true","message":"Ble stopped successfully."}
-    return {"success":"true", "message":"BLE is not running"}
+        return {"success": "true", "message": "BLE stopped successfully."}
+    return {"success": "true", "message": "BLE is not running"}
