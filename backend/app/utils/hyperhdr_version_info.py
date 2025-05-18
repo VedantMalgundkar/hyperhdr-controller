@@ -1,5 +1,6 @@
 import re
 import os
+import psutil
 import time
 import requests
 import subprocess
@@ -221,21 +222,86 @@ def scan_wifi_around():
     return {"status":"success", "message":"Network fetched successfully", "networks": networks}
 
 
+# def start_ble_service():
+#     global ble_process, agent_process
+#     if ble_process is None or ble_process.poll() is not None:
+#         agent_process = subprocess.Popen(["/usr/bin/python3", ble_auto_pairing_path])
+#         ble_process = subprocess.Popen(["/usr/bin/python3", wifi_util_path])
+#         return {"status":"success", "message": "BLE started successfully."}
+#     return {"status":"success", "message": "BLE already running"}
+
+# def stop_ble_service():
+#     global ble_process, agent_process
+#     if ble_process and ble_process.poll() is None:
+#         if agent_process and agent_process.poll() is None:
+#             agent_process.terminate()
+#             agent_process = None
+#         ble_process.terminate()
+#         ble_process = None
+#         return {"status":"success", "message": "BLE stopped successfully."}
+#     return {"status":"success", "message": "BLE is not running"}
+
+def find_process_by_script(script_path):
+    """Return a list of psutil.Process objects matching the script path."""
+    matching = []
+    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+        try:
+            cmdline = proc.info['cmdline']
+            if cmdline and script_path in ' '.join(cmdline):
+                matching.append(proc)
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            continue
+    return matching
+
 def start_ble_service():
-    global ble_process, agent_process
-    if ble_process is None or ble_process.poll() is not None:
-        agent_process = subprocess.Popen(["/usr/bin/python3", ble_auto_pairing_path])
-        ble_process = subprocess.Popen(["/usr/bin/python3", wifi_util_path])
-        return { "success": "true", "message": "BLE started successfully."}
-    return {"success": "true", "message": "BLE already running"}
+    wifi_processes = find_process_by_script(wifi_util_path)
+    agent_processes = find_process_by_script(ble_auto_pairing_path)
+
+    if not wifi_processes:
+        subprocess.Popen(["/usr/bin/python3", ble_auto_pairing_path])
+        subprocess.Popen(["/usr/bin/python3", wifi_util_path])
+        return {"status": "success", "message": "BLE started successfully."}
+    else:
+        return {"status": "success", "message": "BLE already running."}
 
 def stop_ble_service():
-    global ble_process, agent_process
-    if ble_process and ble_process.poll() is None:
-        if agent_process and agent_process.poll() is None:
-            agent_process.terminate()
-            agent_process = None
-        ble_process.terminate()
-        ble_process = None
-        return {"success": "true", "message": "BLE stopped successfully."}
-    return {"success": "true", "message": "BLE is not running"}
+    stopped_any = False
+
+    for proc in find_process_by_script(wifi_util_path) + find_process_by_script(ble_auto_pairing_path):
+        try:
+            proc.terminate()
+            stopped_any = True
+        except Exception as e:
+            return {"status": "error", "message": f"Failed to stop BLE: {e}"}
+
+    return {
+        "status": "success",
+        "message": "BLE stopped successfully." if stopped_any else "BLE is not running."
+    }
+
+
+def reset_service():
+    subprocess.run(
+        ["sudo", "dpkg", "--purge", "hyperhdr"],
+        check=True,
+        capture_output=True,
+        text=True
+    )
+
+    subprocess.run(
+        ["sudo", "apt", "autoremove", "-y"],
+        check=True,
+        capture_output=True,
+        text=True
+    )
+
+    subprocess.run(["sudo", "rm", "-rf", "/etc/hyperhdr"], check=False)
+    subprocess.run(["sudo", "rm", "-rf", "/opt/hyperhdr"], check=False)
+    subprocess.run(["sudo", "rm", "-rf", "/var/lib/hyperhdr"], check=False)
+    subprocess.run(["sudo", "rm", "-f", "/etc/systemd/system/hyperhdr.service"], check=False)
+    subprocess.run(["sudo", "systemctl", "daemon-reload"], check=False)
+
+    return {
+        "status": "success",
+        "message": "HyperHDR fully uninstalled and orphaned packages removed."
+    }

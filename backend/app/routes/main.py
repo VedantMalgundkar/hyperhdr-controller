@@ -173,7 +173,7 @@ def stop_pi_hotspot():
 def start_ble():
     try:
         res = start_ble_service()
-        if res["success"]=="true" and "started" in res["message"]:
+        if res["status"]=="success" and "started" in res["message"]:
             return jsonify(res), 200
         return jsonify(res), 429
     except subprocess.CalledProcessError as e:
@@ -185,7 +185,7 @@ def start_ble():
 def stop_ble():
     try:
         res = stop_ble_service()
-        if res["success"]=="true" and "stopped" in res["message"]:
+        if res["status"]=="success" and "stopped" in res["message"]:
             return jsonify(res), 200
         return jsonify(res), 429
     except subprocess.CalledProcessError as e:
