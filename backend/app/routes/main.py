@@ -74,8 +74,9 @@ def get_current_hyperhdr_version():
         return jsonify(local_version),200
     except Exception as e:
         return jsonify({
+            "status":"failed",
             "version": None,
-            "output": f"Command failed: {str(e)}"
+            "error": f"Command failed: {str(e)}",
         }), 500
 
 @main_bp.route("/hyperhdr/avl-versions", methods=["GET"])
@@ -85,12 +86,13 @@ def get_hyperhdr_versions():
 
         return jsonify(github_versions), 200
     except Exception as e:
-        return jsonify({"error": f"Error checking status: {str(e)}"}), 500
+        return jsonify({"success":"failed", "error": f"Error checking status: {str(e)}"}), 500
 
 @main_bp.route("/connect-wifi", methods=["POST"])
 def connect_wifi():
     if not request.is_json:
         return jsonify({
+            "status": "failed",
             "error": "Unsupported Media Type",
             "details": "Content-Type must be application/json"
         }), 415
@@ -111,31 +113,27 @@ def connect_wifi():
         
         print(f"\n  connected to {req.ssid} >>>>>>>>>> \n")
 
-        return jsonify({"success":"true", "details": f"Connected to Wi-Fi {req.ssid}"})
+        return jsonify({"status":"success", "message": f"Connected to Wi-Fi {req.ssid}"}), 200
 
     except ValidationError as e:
         start_hotspot()
-        print("hotspot restarted 1 >>>\n")
-        return jsonify({"success":"false", "error": "Invalid data", "details": str(e)}), 400
+        return jsonify({"status":"failed", "error": "Invalid data", "details": str(e)}), 400
     except HTTPException as e:
-        print("hotspot restarted 2 >>>\n")
         start_hotspot()
         return jsonify({"status":"failed", "error": e.description}), e.code
     except subprocess.CalledProcessError as e:
-        print("hotspot restarted 3 >>>\n")
         start_hotspot()
-        return jsonify({"success":"false", "error": "Wi-Fi connection failed", "details": e.stderr}), 400
+        return jsonify({"status":"failed", "error": "Wi-Fi connection failed", "details": e.stderr}), 400
     except Exception as e:
-        print("hotspot restarted 4 >>>\n")
         start_hotspot()
-        return jsonify({"success":"false", "error": "Server error", "details": str(e)}), 500
+        return jsonify({"status":"failed", "error": "Server error", "details": str(e)}), 500
     
 
 @main_bp.route("/scan-wifi", methods=["GET"])
 def scan_wifi():
     try:
-        available_network = scan_wifi_around()
-        return jsonify({"success":"true", "networks": available_network})
+        res = scan_wifi_around()
+        return jsonify() 
 
     except subprocess.CalledProcessError as e:
         return jsonify({"success":"false", "error": "Wi-Fi connection failed", "details": e.stderr}), 400

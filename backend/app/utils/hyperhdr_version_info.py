@@ -25,7 +25,7 @@ def fetch_github_versions():
     res = load_from_releases_json()
     
     if res and "created_at" in res and (current_time - res["created_at"]) < CACHE_TTL:
-        return res["releases"]
+        return {"status": "success","message":"Version fetched successfully", "versions": res["releases"]}
 
     response = requests.get(
         os.getenv("HYPERHDR_REPO"),
@@ -75,8 +75,7 @@ def fetch_github_versions():
         "created_at": current_time
     })
     
-    return result
-
+    return {"status": "success","message":"Version fetched successfully", "versions": result }
 
 def get_hyperhdr_version():
     result = subprocess.run(
@@ -92,8 +91,9 @@ def get_hyperhdr_version():
     version = version_match.group(1) if version_match else None
 
     return {
+        "status": "success",
+        "message": f"Fetched hyperhdr version successfully : {full_output}",
         "version": version,
-        "output": full_output
     }
 
 def start_hyperhdr_service(username):
@@ -113,7 +113,7 @@ def status_hyperhdr_service(username):
         capture_output=True, text=True
     )
     status = result.stdout.strip()
-    return {"status": "success","hyperhdr_status":status}
+    return {"status": "success","hyperhdr_status":status, "message": "Fetched hyperhdr status successfully"}
 
 def uninstall_current_hyper_hdr_service():
     subprocess.run(
@@ -218,7 +218,7 @@ def scan_wifi_around():
 
     networks = sorted(networks,key=lambda x:x["in_use"],reverse=True)
 
-    return networks
+    return {"status":"success", "message":"Network fetched successfully", "networks": networks}
 
 
 def start_ble_service():
@@ -226,7 +226,7 @@ def start_ble_service():
     if ble_process is None or ble_process.poll() is not None:
         agent_process = subprocess.Popen(["/usr/bin/python3", ble_auto_pairing_path])
         ble_process = subprocess.Popen(["/usr/bin/python3", wifi_util_path])
-        return {"success": "true", "message": "BLE started successfully."}
+        return { "success": "true", "message": "BLE started successfully."}
     return {"success": "true", "message": "BLE already running"}
 
 def stop_ble_service():
