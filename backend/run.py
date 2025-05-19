@@ -4,7 +4,6 @@ from app import create_app
 from flask import jsonify
 from app.routes.main import main_bp
 from app.routes.hyperhdr_install import hyperhdr_install_bp
-from app.utils.hyperhdr_version_info import start_hotspot, is_paired
 
 app = create_app()
 

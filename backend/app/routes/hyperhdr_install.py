@@ -9,8 +9,8 @@ import fcntl
 from contextlib import contextmanager
 from flask import request
 from werkzeug.exceptions import TooManyRequests,HTTPException
-from app.utils.req_modifier import modify_request, get_current_user
-from app.utils.hyperhdr_version_info import get_hyperhdr_version, status_hyperhdr_service, stop_hyperhdr_service, uninstall_current_hyper_hdr_service
+from app.middlewares.req_modifier import modify_request, get_current_user
+from app.services.pi_commands import get_hyperhdr_version, status_hyperhdr_service, stop_hyperhdr_service, uninstall_current_hyper_hdr_service
 
 hyperhdr_install_bp = Blueprint('hyperhdr_install', __name__)
 
@@ -88,10 +88,8 @@ def install_hyperhdr():
             status_res = status_hyperhdr_service(username)
             if status_res['hyperhdr_status'] == 'active':
                 stop_res = stop_hyperhdr_service(username)
-                print(stop_res)
 
             unins_res = uninstall_current_hyper_hdr_service()
-            print(unins_res)
 
             # Install package
             result = subprocess.run(
@@ -100,7 +98,6 @@ def install_hyperhdr():
                 capture_output=True,
                 text=True
             )
-            # time.sleep(10)
             return jsonify({"status": "success", "message": "Installation complete","stdout": result.stdout}),200
 
     except subprocess.CalledProcessError as e:

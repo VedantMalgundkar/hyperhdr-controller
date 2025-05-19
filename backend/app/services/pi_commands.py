@@ -4,7 +4,7 @@ import psutil
 import time
 import requests
 import subprocess
-from .hyperhdr_history import save_to_releases_json,load_from_releases_json
+from .release_cache import save_to_releases_json,load_from_releases_json
 from dotenv import load_dotenv
 
 agent_process = None
@@ -71,6 +71,8 @@ def fetch_github_versions():
         if len(filterted_assets) == 0:
             continue
         
+        filterted_assets.sort(key=lambda x: "bookworm" not in x["name"].lower())
+
         result.append({
             "version": version,
             "name":name,

@@ -100,7 +100,13 @@ sudo systemctl enable auto_pair_agent.service
 sudo systemctl start wifi_utilities.service
 sudo systemctl start auto_pair_agent.service
 
-# 8. Run Flask server manually
+# 8. Add .env file with HyperHDR repo URL
+banner "🔧 Creating .env File"
+cat <<EOF > "$PROJECT_DIR/.env"
+HYPERHDR_REPO=https://api.github.com/repos/awawa-dev/HyperHDR/releases
+EOF
+
+# 9. Run Flask server manually
 banner "🚀 Launching Flask Server (manual)"
 cd "$PROJECT_DIR/backend"
 source "$PROJECT_DIR/venv/bin/activate"
