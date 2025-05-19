@@ -79,8 +79,15 @@ class ScanWifiCharacteristic(Characteristic):
         
     def get_nearby_wifi(self):
         output = subprocess.check_output(
-            ["sudo", "nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY,IN-USE", "dev", "wifi", "list"]
+        ["sudo", "nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY,IN-USE", "dev", "wifi", "list"]
         ).decode("utf-8")
+
+        # Get list of saved (known) connections
+        saved_output = subprocess.check_output(
+            ["nmcli", "-t", "-f", "NAME", "connection", "show"]
+        ).decode("utf-8")
+
+        saved_ssids = set([line.strip() for line in saved_output.strip().split('\n') if line.strip()])
 
         networks = []
         pattern = re.compile(r'^(.*?):(\d+):([^:]*):?(.*)?$')
@@ -99,13 +106,15 @@ class ScanWifiCharacteristic(Characteristic):
                         "ssid": ssid,
                         "signal": signal,
                         "security": security,
-                        "in_use": in_use
+                        "in_use": in_use,
+                        "is_saved": ssid in saved_ssids
                     })
 
-        networks = sorted(networks,key=lambda x:x["in_use"],reverse=True)
+        networks = sorted(networks, key=lambda x: x["in_use"], reverse=True)
+
         json_str = json.dumps(networks)
         value = [dbus.Byte(b) for b in json_str.encode("utf-8")]
-                    
+
         return value
 
     def decode_dbus_array(self,value):
@@ -116,30 +125,24 @@ class ScanWifiCharacteristic(Characteristic):
         return value
 
     def WriteValue(self, value, options):
-        print("write Value >>>>>>",self.decode_dbus_array(value))
         try:
             data = json.loads(bytes(value).decode("utf-8"))
             ssid = data.get("ssid")
             password = data.get("password")
-            print(f"Received SSID: {ssid}, Password: {password}")
             self.configure_wifi_nmcli(ssid,password)
             self.connect_wifi_nmcli(ssid)
 
             msg = {"status":"success", "message": f"Successfully connected to {ssid}"}
             self.status_char.set_status(str(msg))
-            print(msg)
         except json.JSONDecodeError as e:
             msg = {"status":"failed", "error": "Invalid JSON format:", "details": str(e)}
             self.status_char.set_status(str(msg))
-            print(msg)
         except subprocess.CalledProcessError as e:
             msg = {"status":"failed", "error": "Wi-Fi connection failed", "details": e.stderr}
             self.status_char.set_status(str(msg))
-            print(msg)
         except Exception as e:
             msg = {"status":"failed", "error": "Something went wrong.","details":str(e)}
             self.status_char.set_status(str(msg))
-            print(msg)
         
         return value
 

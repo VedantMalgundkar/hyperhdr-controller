@@ -133,7 +133,7 @@ def connect_wifi():
 def scan_wifi():
     try:
         res = scan_wifi_around()
-        return jsonify() 
+        return jsonify(res), 200
 
     except subprocess.CalledProcessError as e:
         return jsonify({"success":"false", "error": "Wi-Fi connection failed", "details": e.stderr}), 400

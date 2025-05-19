@@ -202,6 +202,12 @@ def scan_wifi_around():
         ["sudo", "nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY,IN-USE", "dev", "wifi", "list"]
     ).decode("utf-8")
 
+    saved_output = subprocess.check_output(
+        ["nmcli", "-t", "-f", "NAME", "connection", "show"]
+    ).decode("utf-8")
+
+    saved_ssids = set([line.strip() for line in saved_output.strip().split('\n') if line.strip()])
+
     networks = []
     pattern = re.compile(r'^(.*?):(\d+):([^:]*):?(.*)?$')
 
@@ -219,10 +225,11 @@ def scan_wifi_around():
                     "ssid": ssid,
                     "signal": signal,
                     "security": security,
-                    "in_use": in_use
+                    "in_use": in_use,
+                    "is_saved": ssid in saved_ssids
                 })
 
-    networks = sorted(networks,key=lambda x:x["in_use"],reverse=True)
+    networks = sorted(networks, key=lambda x: x["in_use"], reverse=True)
 
     return {"status":"success", "message":"Network fetched successfully", "networks": networks}
 
