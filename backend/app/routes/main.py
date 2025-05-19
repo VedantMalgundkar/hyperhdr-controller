@@ -2,8 +2,8 @@ from flask import Blueprint, jsonify, abort
 import subprocess
 from flask import request
 from werkzeug.exceptions import HTTPException, Unauthorized
-from app.utils.req_modifier import modify_request, get_current_user
-from app.utils.hyperhdr_version_info import start_ble_service, stop_ble_service, scan_wifi_around, stop_hotspot, start_hotspot, configure_wifi_nmcli, connect_wifi_nmcli, start_hyperhdr_service,stop_hyperhdr_service,status_hyperhdr_service,get_hyperhdr_version,fetch_github_versions
+from app.middlewares.req_modifier import modify_request, get_current_user
+from app.services.pi_commands import start_ble_service, stop_ble_service, scan_wifi_around, stop_hotspot, start_hotspot, configure_wifi_nmcli, connect_wifi_nmcli, start_hyperhdr_service,stop_hyperhdr_service,status_hyperhdr_service,get_hyperhdr_version,fetch_github_versions
 from pydantic import BaseModel, SecretStr, ValidationError
 
 class WifiRequest(BaseModel):
