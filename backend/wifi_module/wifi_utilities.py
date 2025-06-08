@@ -106,7 +106,7 @@ class ScanWifiCharacteristic(Characteristic):
                     networks.append({
                         "s": ssid,
                         "sr": signal,
-                        # "lck": security,
+                        "lck": 1 if security != "OPEN" else 0,
                         "u": in_use,
                         "sav": 1 if ssid in saved_ssids else 0
                     })
