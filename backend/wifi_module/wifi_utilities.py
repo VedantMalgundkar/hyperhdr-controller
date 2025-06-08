@@ -45,9 +45,11 @@ class WifiScanningService(Service):
         Service.__init__(self, index, self.WIFI_SVC_UUID, True)
         self.status_char = WifiStatusCharacteristic(self)
         self.scan_char = ScanWifiCharacteristic(self, self.status_char)
+        self.ip_char = GetIpAdddrCharacteristic(self)
 
         self.add_characteristic(self.status_char)
         self.add_characteristic(self.scan_char)
+        self.add_characteristic(self.ip_char)
 
 class ScanWifiCharacteristic(Characteristic):
     WIFI_CHARACTERISTIC_UUID = "00000003-710e-4a5b-8d75-3e5b444bc3cf"
@@ -57,7 +59,6 @@ class ScanWifiCharacteristic(Characteristic):
                 self, self.WIFI_CHARACTERISTIC_UUID,
                 ["read", "write"], service)
         self.status_char = status_char
-        self.add_descriptor(ScanWifiDescriptor(self))
 
     def configure_wifi_nmcli(self, ssid: str, password: str):
         return subprocess.run([
@@ -99,18 +100,18 @@ class ScanWifiCharacteristic(Characteristic):
                 signal = int(match.group(2).strip())
                 security = match.group(3).strip() or "OPEN"
                 in_use_field = match.group(4).strip()
-                in_use = True if in_use_field == '*' else False
+                in_use = 1 if in_use_field == '*' else 0
 
                 if ssid:  # skip hidden/empty SSIDs
                     networks.append({
-                        "ssid": ssid,
-                        "signal": signal,
-                        "security": security,
-                        "in_use": in_use,
-                        "is_saved": ssid in saved_ssids
+                        "s": ssid,
+                        "sr": signal,
+                        # "lck": security,
+                        "u": in_use,
+                        "sav": 1 if ssid in saved_ssids else 0
                     })
 
-        networks = sorted(networks, key=lambda x: x["in_use"], reverse=True)
+        networks = sorted(networks, key=lambda x: x["u"], reverse=True)
 
         json_str = json.dumps(networks)
         value = [dbus.Byte(b) for b in json_str.encode("utf-8")]
@@ -163,24 +164,28 @@ class WifiStatusCharacteristic(Characteristic):
     def ReadValue(self, options):
         return self.value
 
-class ScanWifiDescriptor(Descriptor):
-    WIFI_DESCRIPTOR_UUID = "2901"
-    WIFI_DESCRIPTOR_VALUE = "Scans nearby wifi networks"
+class GetIpAdddrCharacteristic(Characteristic):
+    IP_ADDR_UUID = "00000005-710e-4a5b-8d75-3e5b444bc3cf"
 
-    def __init__(self, characteristic):
-        Descriptor.__init__(
-                self, self.WIFI_DESCRIPTOR_UUID,
-                ["read"],
-                characteristic)
+    def __init__(self, service):
+        Characteristic.__init__(
+            self, self.IP_ADDR_UUID,
+            ["read"],
+            service)
+        self.value = []
+    
+    def get_ip_addr(self):
+        try:
+            result = subprocess.check_output(["hostname", "-I"])
+            ip_str = result.decode("utf-8").strip().split()[0]
+            self.value = [dbus.Byte(c.encode()) for c in ip_str]
+        except Exception as e:
+            print(f"Failed to get IP address: {e}")
+            self.value = []
 
     def ReadValue(self, options):
-        value = []
-        desc = self.WIFI_DESCRIPTOR_VALUE
-
-        for c in desc:
-            value.append(dbus.Byte(c.encode()))
-
-        return value
+        self.get_ip_addr()
+        return self.value
 
 class BLEServer:
     def __init__(self):
