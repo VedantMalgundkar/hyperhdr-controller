@@ -84,12 +84,22 @@ def install_hyperhdr():
                     "error": "Download failed"
                 }), 500
 
-            curr_ver = get_hyperhdr_version()
+            curr_ver = {}
+            try:
+                curr_ver = get_hyperhdr_version()
+            except FileNotFoundError:
+                curr_ver = {
+                    "status": "failed",
+                    "error": "HyperHDR is not installed or not in PATH"
+                }
+
             status_res = status_hyperhdr_service(username)
+
             if status_res['hyperhdr_status'] == 'active':
                 stop_res = stop_hyperhdr_service(username)
-
-            unins_res = uninstall_current_hyper_hdr_service()
+            
+            if curr_ver.get("status") == "success":
+                unins_res = uninstall_current_hyper_hdr_service()
 
             # Install package
             result = subprocess.run(
@@ -105,11 +115,6 @@ def install_hyperhdr():
             "status": "failed",
             "error": e.stderr.strip()
         }), 500
-    except FileNotFoundError:
-        return jsonify({
-            "status": "failed",
-            "error": "HyperHDR is not installed or not in PATH"
-        }), 404
     except HTTPException as e:
         return jsonify({"status":"failed", "error": e.description}), e.code
     except Exception as e:
