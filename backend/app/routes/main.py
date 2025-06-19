@@ -3,7 +3,7 @@ import subprocess
 from flask import request
 from werkzeug.exceptions import HTTPException, Unauthorized
 from app.middlewares.req_modifier import modify_request, get_current_user
-from app.services.pi_commands import start_ble_service, stop_ble_service, scan_wifi_around, stop_hotspot, start_hotspot, configure_wifi_nmcli, connect_wifi_nmcli, start_hyperhdr_service,stop_hyperhdr_service,status_hyperhdr_service,get_hyperhdr_version,fetch_github_versions
+from app.services.pi_commands import start_ble_service, stop_ble_service, scan_wifi_around, stop_hotspot, start_hotspot, configure_wifi_nmcli, connect_wifi_nmcli, start_hyperhdr_service,stop_hyperhdr_service,status_hyperhdr_service,get_hyperhdr_version
 from pydantic import BaseModel, SecretStr, ValidationError
 
 class WifiRequest(BaseModel):
@@ -65,28 +65,6 @@ def status_hyperhdr():
                 "status":"failed", 
                 "error": f"Unexpected error: {str(e)}"
             }), 500
-
-@main_bp.route("/hyperhdr/current-version", methods=["GET"])
-def get_current_hyperhdr_version():
-    try:
-        local_version = get_hyperhdr_version()
-        
-        return jsonify(local_version),200
-    except Exception as e:
-        return jsonify({
-            "status":"failed",
-            "version": None,
-            "error": f"Command failed: {str(e)}",
-        }), 500
-
-@main_bp.route("/hyperhdr/avl-versions", methods=["GET"])
-def get_hyperhdr_versions():
-    try:
-        github_versions = fetch_github_versions()
-
-        return jsonify(github_versions), 200
-    except Exception as e:
-        return jsonify({"success":"failed", "error": f"Error checking status: {str(e)}"}), 500
 
 @main_bp.route("/connect-wifi", methods=["POST"])
 def connect_wifi():

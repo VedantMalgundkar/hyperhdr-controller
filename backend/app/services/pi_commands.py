@@ -33,6 +33,16 @@ def fetch_github_versions():
     CACHE_TTL = 24 * 60 * 60
     current_time = time.time()
     res = load_from_releases_json()
+
+    ver_res = {}
+    try:
+        ver_res = get_hyperhdr_version()
+    except Exception as e:
+        ver_res = {
+            "status":"failed",
+            "version": None,
+            "error": f"Command failed: {str(e)}",
+        }
     
     if res and "created_at" in res and (current_time - res["created_at"]) < CACHE_TTL:
         return {"status": "success","message":"Version fetched successfully", "versions": res["releases"]}
@@ -51,7 +61,6 @@ def fetch_github_versions():
         if "beta" in version:
             continue
         name = release.get("name")
-        description = release.get("body", "")
         published_at = release.get("published_at")
         assets = release.get("assets", [])
         filterted_assets = []
@@ -72,14 +81,13 @@ def fetch_github_versions():
             continue
         
         filterted_assets.sort(key=lambda x: "bookworm" not in x["name"].lower())
-
+        
         result.append({
             "version": version,
             "name":name,
-            "description":description,
             "published_at":published_at,
-            "description": description,
-            "assets": filterted_assets
+            "assets": filterted_assets,
+            "is_installed": f"v{ver_res.get('version')}" == version
         })
 
     save_to_releases_json({

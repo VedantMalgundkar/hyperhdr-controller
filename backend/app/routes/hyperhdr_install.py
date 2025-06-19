@@ -10,7 +10,7 @@ from contextlib import contextmanager
 from flask import request
 from werkzeug.exceptions import TooManyRequests,HTTPException
 from app.middlewares.req_modifier import modify_request, get_current_user
-from app.services.pi_commands import get_hyperhdr_version, status_hyperhdr_service, stop_hyperhdr_service, uninstall_current_hyper_hdr_service
+from app.services.pi_commands import get_hyperhdr_version, status_hyperhdr_service, stop_hyperhdr_service, uninstall_current_hyper_hdr_service,fetch_github_versions
 
 hyperhdr_install_bp = Blueprint('hyperhdr_install', __name__)
 
@@ -126,3 +126,25 @@ def install_hyperhdr():
             cleanup_downloads()
         except Exception as e:
             print(f"Warning: Cleanup failed: {e}")
+
+@hyperhdr_install_bp.route("/current-version", methods=["GET"])
+def get_current_hyperhdr_version():
+    try:
+        local_version = get_hyperhdr_version()
+        
+        return jsonify(local_version),200
+    except Exception as e:
+        return jsonify({
+            "status":"failed",
+            "version": None,
+            "error": f"Command failed: {str(e)}",
+        }), 500
+
+@hyperhdr_install_bp.route("/avl-versions", methods=["GET"])
+def get_hyperhdr_versions():
+    try:
+        github_versions = fetch_github_versions()
+
+        return jsonify(github_versions), 200
+    except Exception as e:
+        return jsonify({"success":"failed", "error": f"Error checking status: {str(e)}"}), 500
