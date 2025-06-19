@@ -43,6 +43,12 @@ def fetch_github_versions():
             "version": None,
             "error": f"Command failed: {str(e)}",
         }
+    version_tag = f"v{ver_res.get('version')}"
+
+    res["releases"] = [
+        {**release, "is_installed": release.get("version") == version_tag}
+        for release in res["releases"]
+    ]
     
     if res and "created_at" in res and (current_time - res["created_at"]) < CACHE_TTL:
         return {"status": "success","message":"Version fetched successfully", "versions": res["releases"]}
