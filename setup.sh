@@ -24,6 +24,20 @@ banner "📦 Installing Git"
 sudo apt update
 sudo apt install -y git
 
+banner "🔑 Setting Unique Hostname Based on MAC"
+
+IFACE="eth0"
+if ! cat /sys/class/net/$IFACE/address &>/dev/null; then
+    IFACE="wlan0"
+fi
+MAC_SUFFIX=$(cat /sys/class/net/$IFACE/address | tr -d ':' | tail -c 5)
+AUTO_HOSTNAME="pi-${MAC_SUFFIX}"
+
+# Set hostname
+echo -e "${BLUE}Setting hostname to ${AUTO_HOSTNAME}...${NC}"
+sudo hostnamectl set-hostname "$AUTO_HOSTNAME"
+echo -e "${GREEN}✅ Hostname auto-set to $AUTO_HOSTNAME${NC}"
+
 # 2. Install VS Code (ARM64)
 banner "💻 Installing VS Code"
 wget -qO- https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > packages.microsoft.gpg
@@ -105,6 +119,24 @@ banner "🔧 Creating .env File"
 cat <<EOF > "$PROJECT_DIR/.env"
 HYPERHDR_REPO=https://api.github.com/repos/awawa-dev/HyperHDR/releases
 EOF
+
+# 📡 Avahi mDNS for Flask Service Discovery
+banner "📡 Creating Avahi mDNS Service File for Flask Server"
+
+sudo tee /etc/avahi/services/hyperhdr-flask.service > /dev/null <<EOF
+<service-group>
+  <name replace-wildcards="yes">HyperHDR Flask Service on %h</name>
+  <service>
+    <type>_hyperhdr._tcp</type>
+    <port>5000</port>
+  </service>
+</service-group>
+EOF
+
+sudo apt-get install -y avahi-daemon
+sudo systemctl restart avahi-daemon
+
+echo -e "${GREEN}✅ mDNS service registered for Flask at http://$(hostname).local:5000${NC}"
 
 # 9. Run Flask server manually
 banner "🚀 Launching Flask Server (manual)"
