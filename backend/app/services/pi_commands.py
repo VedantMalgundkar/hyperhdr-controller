@@ -35,23 +35,33 @@ def fetch_github_versions():
     res = load_from_releases_json()
 
     ver_res = {}
-    try:
-        ver_res = get_hyperhdr_version()
-    except Exception as e:
-        ver_res = {
-            "status":"failed",
-            "version": None,
-            "error": f"Command failed: {str(e)}",
-        }
-    version_tag = f"v{ver_res.get('version')}"
+    if res:
+        try:
+            ver_res = get_hyperhdr_version()
+        except Exception as e:
+            ver_res = {
+                "status": "failed",
+                "version": None,
+                "error": f"Command failed: {str(e)}",
+            }
 
-    res["releases"] = [
-        {**release, "is_installed": release.get("version") == version_tag}
-        for release in res["releases"]
-    ]
-    
-    if res and "created_at" in res and (current_time - res["created_at"]) < CACHE_TTL:
-        return {"status": "success","message":"Version fetched successfully", "versions": res["releases"]}
+        version_tag = f"v{ver_res.get('version')}" if ver_res.get("version") else None
+
+        if "releases" in res and isinstance(res["releases"], list):
+            res["releases"] = [
+                {
+                    **release,
+                    "is_installed": version_tag is not None and release.get("version") == version_tag
+                }
+                for release in res["releases"]
+            ]
+
+        if "created_at" in res and (current_time - res["created_at"]) < CACHE_TTL:
+            return {
+                "status": "success",
+                "message": "Version fetched successfully",
+                "versions": res["releases"]
+            }
 
     response = requests.get(
         os.getenv("HYPERHDR_REPO"),
