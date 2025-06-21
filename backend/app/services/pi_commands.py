@@ -249,6 +249,32 @@ def scan_wifi_around():
 
     return {"status":"success", "message":"Network fetched successfully", "networks": networks}
 
+def get_connected_network():
+    ssid = subprocess.check_output(
+        "nmcli -t -f active,ssid,signal,security dev wifi | grep '^yes' | cut -d':' -f2-",
+        shell=True
+    ).decode("utf-8").strip()
+
+    if not ssid:
+        return {
+            "status": "success",
+            "message": "No connected network",
+            "network": None
+        }
+
+    parts = ssid.split(":", maxsplit=2)
+    return {
+        "status": "success",
+        "message": "Connected network fetched successfully",
+        "network": {
+            "ssid": parts[0],
+            "signal": int(parts[1]),
+            "security": parts[2] if len(parts) > 2 else "OPEN",
+            "in_use": True,
+            "is_saved": True
+        }
+    }
+
 def is_ble_active():
     ble_status = _get_service_status('auto_pair_agent.service')
     wifi_status = _get_service_status('wifi_utilities.service')

@@ -3,7 +3,7 @@ import subprocess
 from flask import request
 from werkzeug.exceptions import HTTPException, Unauthorized
 from app.middlewares.req_modifier import modify_request, get_current_user
-from app.services.pi_commands import start_ble_service, stop_ble_service, scan_wifi_around, stop_hotspot, start_hotspot, configure_wifi_nmcli, connect_wifi_nmcli, start_hyperhdr_service,stop_hyperhdr_service,status_hyperhdr_service,get_hyperhdr_version
+from app.services.pi_commands import start_ble_service, stop_ble_service, scan_wifi_around, get_connected_network , stop_hotspot, start_hotspot, configure_wifi_nmcli, connect_wifi_nmcli, start_hyperhdr_service,stop_hyperhdr_service,status_hyperhdr_service,get_hyperhdr_version
 from pydantic import BaseModel, SecretStr, ValidationError
 
 class WifiRequest(BaseModel):
@@ -117,6 +117,25 @@ def scan_wifi():
         return jsonify({"success":"false", "error": "Wi-Fi connection failed", "details": e.stderr}), 400
     except Exception as e:
         return jsonify({"success":"false", "error": "Server error", "details": str(e)}), 500
+
+@main_bp.route("/get-connected-wifi", methods=["GET"])
+def get_connected_wifi():
+    try:
+        res = get_connected_network()
+        return jsonify(res), 200
+    except subprocess.CalledProcessError as e:
+        return jsonify({
+            "success": "false",
+            "error": "Failed to get connected WiFi",
+            "details": e.output.decode("utf-8") if e.output else str(e)
+        }), 400
+    except Exception as e:
+        return jsonify({
+            "success": "false",
+            "error": "Server error",
+            "details": str(e)
+        }), 500
+
 
 @main_bp.route("/start-hostspot", methods=["POST"])
 def start_pi_hotspot():
