@@ -30,7 +30,7 @@ def start_hyperhdr():
                 "error": f"Unexpected error: {str(e)}"
             }), 500
 
-@main_bp.route('/enable-boot-hyperhdr', methods=['GET'])
+@main_bp.route('/enable-boot-hyperhdr', methods=['POST'])
 @modify_request(add_data={"user": get_current_user()})
 def enable_boot_hyperhdr():
     try:
@@ -66,7 +66,7 @@ def stop_hyperhdr():
                 "error": f"Unexpected error: {str(e)}"
             }), 500
 
-@main_bp.route('/disable-boot-hyperhdr', methods=['GET'])
+@main_bp.route('/disable-boot-hyperhdr', methods=['POST'])
 @modify_request(add_data={"user": get_current_user()})
 def disable_boot_hyperhdr():
     try:
