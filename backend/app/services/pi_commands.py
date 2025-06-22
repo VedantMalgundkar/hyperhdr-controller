@@ -18,9 +18,10 @@ load_dotenv()
 
 PAIRING_FLAG = "/home/pi/.paired"
 
-def _get_service_status(service_name):
+def _get_service_status(service_name, type="status"):
+    cmd = "is-active" if type == "status" else "is-enabled"
     result = subprocess.run(
-        ["sudo", "systemctl", "is-active", service_name],
+        ["sudo", "systemctl", cmd, service_name],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True
@@ -146,6 +147,29 @@ def stop_hyperhdr_service(username):
 def status_hyperhdr_service(username):
     result = _get_service_status(f"hyperhdr@{username}.service")
     return {"status": "success","hyperhdr_status": result, "message": "Fetched hyperhdr status successfully"}
+
+def enable_hyperhdr_service_on_boot(username):
+    subprocess.run(
+        ["sudo", "systemctl", "enable", f"hyperhdr@{username}.service"],
+        check=True
+    )
+    return {"status": "success", "message": "Service enabled on boot successfully."}
+
+def disable_hyperhdr_service_on_boot(username):
+    subprocess.run(
+        ["sudo", "systemctl", "disable", f"hyperhdr@{username}.service"],
+        check=True
+    )
+    return {"status": "success", "message": "Service disabled from boot successfully."}
+
+def boot_status_hyperhdr_service(username):
+    status = _get_service_status(f"hyperhdr@{username}.service", type="boot")
+    return {
+        "status": "success",
+        "is_enabled_on_boot": status == "enabled",
+        "boot_status": status,
+        "message": "Fetched boot status successfully."
+    }
 
 def uninstall_current_hyper_hdr_service():
     subprocess.run(

@@ -3,7 +3,7 @@ import subprocess
 from flask import request
 from werkzeug.exceptions import HTTPException, Unauthorized
 from app.middlewares.req_modifier import modify_request, get_current_user
-from app.services.pi_commands import start_ble_service, stop_ble_service, scan_wifi_around, get_connected_network , stop_hotspot, start_hotspot, configure_wifi_nmcli, connect_wifi_nmcli, start_hyperhdr_service,stop_hyperhdr_service,status_hyperhdr_service,get_hyperhdr_version
+from app.services.pi_commands import start_ble_service, stop_ble_service, enable_hyperhdr_service_on_boot, disable_hyperhdr_service_on_boot , boot_status_hyperhdr_service, scan_wifi_around, get_connected_network , stop_hotspot, start_hotspot, configure_wifi_nmcli, connect_wifi_nmcli, start_hyperhdr_service,stop_hyperhdr_service,status_hyperhdr_service,get_hyperhdr_version
 from pydantic import BaseModel, SecretStr, ValidationError
 
 class WifiRequest(BaseModel):
@@ -18,6 +18,24 @@ def start_hyperhdr():
     try:
         username = request.custom_data['user']
         res = start_hyperhdr_service(username)
+        return jsonify(res),200
+    except subprocess.CalledProcessError as e:
+        return jsonify({
+                "status":"failed", 
+                "error": f"command failed : {str(e)}"
+            }), 500
+    except Exception as e:     
+        return jsonify({
+                "status":"failed", 
+                "error": f"Unexpected error: {str(e)}"
+            }), 500
+
+@main_bp.route('/enable-boot-hyperhdr', methods=['GET'])
+@modify_request(add_data={"user": get_current_user()})
+def enable_boot_hyperhdr():
+    try:
+        username = request.custom_data['user']
+        res = enable_hyperhdr_service_on_boot(username)
         return jsonify(res),200
     except subprocess.CalledProcessError as e:
         return jsonify({
@@ -48,12 +66,48 @@ def stop_hyperhdr():
                 "error": f"Unexpected error: {str(e)}"
             }), 500
 
+@main_bp.route('/disable-boot-hyperhdr', methods=['GET'])
+@modify_request(add_data={"user": get_current_user()})
+def disable_boot_hyperhdr():
+    try:
+        username = request.custom_data['user']
+        res = disable_hyperhdr_service_on_boot(username)
+        return jsonify(res),200
+    except subprocess.CalledProcessError as e:
+        return jsonify({
+                "status":"failed", 
+                "error": f"command failed : {str(e)}"
+            }), 500
+    except Exception as e:     
+        return jsonify({
+                "status":"failed", 
+                "error": f"Unexpected error: {str(e)}"
+            }), 500
+
 @main_bp.route('/status-hyperhdr', methods=['GET'])
 @modify_request(add_data={"user": get_current_user()})
 def status_hyperhdr():
     try:
         username = request.custom_data['user']
         res = status_hyperhdr_service(username)
+        return jsonify(res),200
+    except subprocess.CalledProcessError as e:
+        return jsonify({
+                "status":"failed", 
+                "error": f"command failed : {str(e)}"
+            }), 500
+    except Exception as e:     
+        return jsonify({
+                "status":"failed", 
+                "error": f"Unexpected error: {str(e)}"
+            }), 500
+
+@main_bp.route('/boot-status-hyperhdr', methods=['GET'])
+@modify_request(add_data={"user": get_current_user()})
+def boot_status_hyperhdr():
+    try:
+        username = request.custom_data['user']
+        res = boot_status_hyperhdr_service(username)
         return jsonify(res),200
     except subprocess.CalledProcessError as e:
         return jsonify({
