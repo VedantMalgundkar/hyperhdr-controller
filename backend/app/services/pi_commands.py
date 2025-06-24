@@ -362,6 +362,35 @@ def stop_ble_service():
         "message": "BLE services stopped successfully."
     }
 
+def get_device_mac():
+    interface_priority=["eth0", "wlan0"]
+    mac = None
+    for iface in interface_priority:
+        result = subprocess.run(
+            ["cat", f"/sys/class/net/{iface}/address"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        if result.returncode == 0:
+            mac = result.stdout.strip()
+            break
+    
+    return mac
+
+def set_hostname(hostname):
+    result = subprocess.run(
+        ["sudo", "hostnamectl", "set-hostname", hostname],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True
+    )
+    return {
+        "status": "success",
+        "message": f"Hostname set to '{hostname}'.",
+        "details": result.stdout.strip()
+    }
+
 def reset_service():
     subprocess.run(
         ["sudo", "dpkg", "--purge", "hyperhdr"],
