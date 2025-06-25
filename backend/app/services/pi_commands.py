@@ -391,6 +391,13 @@ def set_hostname(hostname):
         "details": result.stdout.strip()
     }
 
+def restart_avahi_daemon():
+    result = subprocess.run(["sudo", "systemctl", "restart", "avahi-daemon"], check=False)
+    return {
+        "status": "success",
+        "message": f"Avahi restarted successfully.",
+    }
+
 def reset_service():
     subprocess.run(
         ["sudo", "dpkg", "--purge", "hyperhdr"],

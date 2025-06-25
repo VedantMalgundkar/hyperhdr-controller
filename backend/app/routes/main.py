@@ -3,7 +3,7 @@ import subprocess
 from flask import request
 from werkzeug.exceptions import HTTPException, Unauthorized, NotFound
 from app.middlewares.req_modifier import modify_request, get_current_user
-from app.services.pi_commands import start_ble_service, stop_ble_service, enable_hyperhdr_service_on_boot, disable_hyperhdr_service_on_boot , boot_status_hyperhdr_service, scan_wifi_around, get_connected_network , stop_hotspot, start_hotspot, configure_wifi_nmcli, connect_wifi_nmcli, start_hyperhdr_service,stop_hyperhdr_service,status_hyperhdr_service,get_hyperhdr_version, get_device_mac, set_hostname  
+from app.services.pi_commands import start_ble_service, stop_ble_service, enable_hyperhdr_service_on_boot, disable_hyperhdr_service_on_boot , boot_status_hyperhdr_service, scan_wifi_around, get_connected_network , stop_hotspot, start_hotspot, configure_wifi_nmcli, connect_wifi_nmcli, start_hyperhdr_service,stop_hyperhdr_service,status_hyperhdr_service,get_hyperhdr_version, get_device_mac, set_hostname, restart_avahi_daemon  
 from pydantic import BaseModel, SecretStr, ValidationError
 
 class WifiRequest(BaseModel):
@@ -145,6 +145,9 @@ def set_unique_hostname():
         new_hostname = f"{hostname}-{mac_suffix}"
 
         res = set_hostname(new_hostname)
+
+        restart_avahi_daemon()
+
         return jsonify(res),200
     except subprocess.CalledProcessError as e:
         return jsonify({
