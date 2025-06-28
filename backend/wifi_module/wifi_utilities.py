@@ -28,9 +28,9 @@ import json
 import threading
 from advertisement import Advertisement
 from service import Application, Service, Characteristic, Descriptor
-from app.services.pi_commands import get_hostname
 
 GATT_CHRC_IFACE = "org.bluez.GattCharacteristic1"
+
 
 class WifiAdvertisement(Advertisement):
     def __init__(self, index):
@@ -39,7 +39,7 @@ class WifiAdvertisement(Advertisement):
         self.include_tx_power = True
 
     def getHostName(self):
-        host_info = get_hostname()
+        host_info = self.get_hostname()
         if host_info["status"] == "success":
             host = host_info["hostname"]
             if "-" in host:
@@ -47,6 +47,28 @@ class WifiAdvertisement(Advertisement):
             return host
         else:
             return "Wifi-Setup"
+
+    def get_hostname(self):
+        try:
+            result = subprocess.run(
+                ["hostname"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=True,
+            )
+
+            return {"status": "success", "hostname": result.stdout.strip()}
+
+        except subprocess.CalledProcessError as e:
+            return {
+                "status": "error",
+                "error": e.stderr.strip() if e.stderr else str(e),
+            }
+
+        except Exception as e:
+            return {"status": "error", "error": str(e)}
+
 
 class WifiScanningService(Service):
     WIFI_SVC_UUID = "00000001-710e-4a5b-8d75-3e5b444bc3cf"
@@ -61,36 +83,61 @@ class WifiScanningService(Service):
         self.add_characteristic(self.scan_char)
         self.add_characteristic(self.ip_char)
 
+
 class ScanWifiCharacteristic(Characteristic):
     WIFI_CHARACTERISTIC_UUID = "00000003-710e-4a5b-8d75-3e5b444bc3cf"
 
     def __init__(self, service, status_char):
         Characteristic.__init__(
-                self, self.WIFI_CHARACTERISTIC_UUID,
-                ["read", "write"], service)
+            self, self.WIFI_CHARACTERISTIC_UUID, ["read", "write"], service
+        )
         self.status_char = status_char
 
     def configure_wifi_nmcli(self, ssid: str, password: str):
-        return subprocess.run([
-            "sudo", "nmcli", "connection", "add",
-            "type", "wifi",
-            "con-name", ssid,
-            "ssid", ssid,
-            "ifname", "wlan0",
-            "wifi-sec.key-mgmt", "wpa-psk",
-            "wifi-sec.psk", password,
-            "connection.autoconnect", "yes",
-            "--", "save", "yes"
-        ], capture_output=True, text=True, check=True)
+        return subprocess.run(
+            [
+                "sudo",
+                "nmcli",
+                "connection",
+                "add",
+                "type",
+                "wifi",
+                "con-name",
+                ssid,
+                "ssid",
+                ssid,
+                "ifname",
+                "wlan0",
+                "wifi-sec.key-mgmt",
+                "wpa-psk",
+                "wifi-sec.psk",
+                password,
+                "connection.autoconnect",
+                "yes",
+                "--",
+                "save",
+                "yes",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
 
-    def connect_wifi_nmcli(self, ssid:str):
-        return subprocess.run([
-            "sudo", "nmcli", "connection", "up", ssid
-        ], check=True)
-        
+    def connect_wifi_nmcli(self, ssid: str):
+        return subprocess.run(["sudo", "nmcli", "connection", "up", ssid], check=True)
+
     def get_nearby_wifi(self):
         output = subprocess.check_output(
-        ["sudo", "nmcli", "-t", "-f", "SSID,SIGNAL,SECURITY,IN-USE", "dev", "wifi", "list"]
+            [
+                "sudo",
+                "nmcli",
+                "-t",
+                "-f",
+                "SSID,SIGNAL,SECURITY,IN-USE",
+                "dev",
+                "wifi",
+                "list",
+            ]
         ).decode("utf-8")
 
         # Get list of saved (known) connections
@@ -98,28 +145,32 @@ class ScanWifiCharacteristic(Characteristic):
             ["nmcli", "-t", "-f", "NAME", "connection", "show"]
         ).decode("utf-8")
 
-        saved_ssids = set([line.strip() for line in saved_output.strip().split('\n') if line.strip()])
+        saved_ssids = set(
+            [line.strip() for line in saved_output.strip().split("\n") if line.strip()]
+        )
 
         networks = []
-        pattern = re.compile(r'^(.*?):(\d+):([^:]*):?(.*)?$')
+        pattern = re.compile(r"^(.*?):(\d+):([^:]*):?(.*)?$")
 
-        for line in output.strip().split('\n'):
+        for line in output.strip().split("\n"):
             match = pattern.match(line.strip())
             if match:
                 ssid = match.group(1).strip()
                 signal = int(match.group(2).strip())
                 security = match.group(3).strip() or "OPEN"
                 in_use_field = match.group(4).strip()
-                in_use = 1 if in_use_field == '*' else 0
+                in_use = 1 if in_use_field == "*" else 0
 
                 if ssid:  # skip hidden/empty SSIDs
-                    networks.append({
-                        "s": ssid,
-                        "sr": signal,
-                        "lck": 1 if security != "OPEN" else 0,
-                        "u": in_use,
-                        "sav": 1 if ssid in saved_ssids else 0
-                    })
+                    networks.append(
+                        {
+                            "s": ssid,
+                            "sr": signal,
+                            "lck": 1 if security != "OPEN" else 0,
+                            "u": in_use,
+                            "sav": 1 if ssid in saved_ssids else 0,
+                        }
+                    )
 
         networks = sorted(networks, key=lambda x: x["u"], reverse=True)
 
@@ -128,7 +179,7 @@ class ScanWifiCharacteristic(Characteristic):
 
         return value
 
-    def decode_dbus_array(self,value):
+    def decode_dbus_array(self, value):
         return bytes(value).decode("utf-8")
 
     def ReadValue(self, options):
@@ -140,31 +191,41 @@ class ScanWifiCharacteristic(Characteristic):
             data = json.loads(bytes(value).decode("utf-8"))
             ssid = data.get("ssid")
             password = data.get("password")
-            self.configure_wifi_nmcli(ssid,password)
+            self.configure_wifi_nmcli(ssid, password)
             self.connect_wifi_nmcli(ssid)
 
-            msg = {"status":"success", "message": f"Successfully connected to {ssid}"}
+            msg = {"status": "success", "message": f"Successfully connected to {ssid}"}
             self.status_char.set_status(str(msg))
         except json.JSONDecodeError as e:
-            msg = {"status":"failed", "error": "Invalid JSON format:", "details": str(e)}
+            msg = {
+                "status": "failed",
+                "error": "Invalid JSON format:",
+                "details": str(e),
+            }
             self.status_char.set_status(str(msg))
         except subprocess.CalledProcessError as e:
-            msg = {"status":"failed", "error": "Wi-Fi connection failed", "details": e.stderr}
+            msg = {
+                "status": "failed",
+                "error": "Wi-Fi connection failed",
+                "details": e.stderr,
+            }
             self.status_char.set_status(str(msg))
         except Exception as e:
-            msg = {"status":"failed", "error": "Something went wrong.","details":str(e)}
+            msg = {
+                "status": "failed",
+                "error": "Something went wrong.",
+                "details": str(e),
+            }
             self.status_char.set_status(str(msg))
-        
+
         return value
+
 
 class WifiStatusCharacteristic(Characteristic):
     WIFI_STATUS_UUID = "00000004-710e-4a5b-8d75-3e5b444bc3cf"
 
     def __init__(self, service):
-        Characteristic.__init__(
-            self, self.WIFI_STATUS_UUID,
-            ["read"],
-            service)
+        Characteristic.__init__(self, self.WIFI_STATUS_UUID, ["read"], service)
         self.value = []
 
     def set_status(self, message):
@@ -174,16 +235,14 @@ class WifiStatusCharacteristic(Characteristic):
     def ReadValue(self, options):
         return self.value
 
+
 class GetIpAdddrCharacteristic(Characteristic):
     IP_ADDR_UUID = "00000005-710e-4a5b-8d75-3e5b444bc3cf"
 
     def __init__(self, service):
-        Characteristic.__init__(
-            self, self.IP_ADDR_UUID,
-            ["read"],
-            service)
+        Characteristic.__init__(self, self.IP_ADDR_UUID, ["read"], service)
         self.value = []
-    
+
     def get_ip_addr(self):
         try:
             result = subprocess.check_output(["hostname", "-I"])
@@ -196,6 +255,7 @@ class GetIpAdddrCharacteristic(Characteristic):
     def ReadValue(self, options):
         self.get_ip_addr()
         return self.value
+
 
 class BLEServer:
     def __init__(self):

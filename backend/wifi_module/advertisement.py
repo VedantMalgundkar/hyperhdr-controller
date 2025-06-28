@@ -54,18 +54,18 @@ class Advertisement(dbus.service.Object):
             properties["LocalName"] = dbus.String(self.local_name)
 
         if self.service_uuids is not None:
-            properties["ServiceUUIDs"] = dbus.Array(self.service_uuids,
-                                                    signature='s')
+            properties["ServiceUUIDs"] = dbus.Array(self.service_uuids, signature="s")
         if self.solicit_uuids is not None:
-            properties["SolicitUUIDs"] = dbus.Array(self.solicit_uuids,
-                                                    signature='s')
+            properties["SolicitUUIDs"] = dbus.Array(self.solicit_uuids, signature="s")
         if self.manufacturer_data is not None:
             properties["ManufacturerData"] = dbus.Dictionary(
-                self.manufacturer_data, signature='qv')
+                self.manufacturer_data, signature="qv"
+            )
 
         if self.service_data is not None:
-            properties["ServiceData"] = dbus.Dictionary(self.service_data,
-                                                        signature='sv')
+            properties["ServiceData"] = dbus.Dictionary(
+                self.service_data, signature="sv"
+            )
         if self.include_tx_power is not None:
             properties["IncludeTxPower"] = dbus.Boolean(self.include_tx_power)
 
@@ -102,20 +102,16 @@ class Advertisement(dbus.service.Object):
             self.local_name = ""
         self.local_name = dbus.String(name)
 
-    @dbus.service.method(DBUS_PROP_IFACE,
-                         in_signature="s",
-                         out_signature="a{sv}")
+    @dbus.service.method(DBUS_PROP_IFACE, in_signature="s", out_signature="a{sv}")
     def GetAll(self, interface):
         if interface != LE_ADVERTISEMENT_IFACE:
             raise InvalidArgsException()
 
         return self.get_properties()[LE_ADVERTISEMENT_IFACE]
 
-    @dbus.service.method(LE_ADVERTISEMENT_IFACE,
-                         in_signature='',
-                         out_signature='')
+    @dbus.service.method(LE_ADVERTISEMENT_IFACE, in_signature="", out_signature="")
     def Release(self):
-        print ('%s: Released!' % self.path)
+        print("%s: Released!" % self.path)
 
     def register_ad_callback(self):
         print("GATT advertisement registered")
@@ -127,8 +123,12 @@ class Advertisement(dbus.service.Object):
         bus = BleTools.get_bus()
         adapter = BleTools.find_adapter(bus)
 
-        ad_manager = dbus.Interface(bus.get_object(BLUEZ_SERVICE_NAME, adapter),
-                                LE_ADVERTISING_MANAGER_IFACE)
-        ad_manager.RegisterAdvertisement(self.get_path(), {},
-                                     reply_handler=self.register_ad_callback,
-                                     error_handler=self.register_ad_error_callback)
+        ad_manager = dbus.Interface(
+            bus.get_object(BLUEZ_SERVICE_NAME, adapter), LE_ADVERTISING_MANAGER_IFACE
+        )
+        ad_manager.RegisterAdvertisement(
+            self.get_path(),
+            {},
+            reply_handler=self.register_ad_callback,
+            error_handler=self.register_ad_error_callback,
+        )

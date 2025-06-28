@@ -4,8 +4,10 @@ import time
 import os, pwd
 import subprocess
 
+
 def get_current_user():
     return pwd.getpwuid(os.getuid()).pw_name
+
 
 def modify_request(add_data=None):
     """
@@ -13,6 +15,7 @@ def modify_request(add_data=None):
     Args:
         add_data (dict): Key-value pairs to inject into request.
     """
+
     def decorator(f):
         @wraps(f)
         def wrapped(*args, **kwargs):
@@ -22,5 +25,7 @@ def modify_request(add_data=None):
                 **(add_data or {}),
             }
             return f(*args, **kwargs)
+
         return wrapped
+
     return decorator
