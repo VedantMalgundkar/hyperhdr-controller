@@ -130,6 +130,24 @@ def boot_status_hyperhdr():
         )
 
 
+@main_bp.route("/get-mac", methods=["GET"])
+def get_mac():
+    try:
+        res = get_device_mac()
+
+        if res["status"] == "failed":
+            raise RuntimeError("MAC address could not be determined from any interface")
+
+        return jsonify(res), 200
+    except subprocess.CalledProcessError as e:
+        return jsonify({"status": "failed", "error": f"command failed : {str(e)}"}), 500
+    except Exception as e:
+        return (
+            jsonify({"status": "failed", "error": f"Unexpected error: {str(e)}"}),
+            500,
+        )
+
+
 @main_bp.route("/set-unique-hostname", methods=["POST"])
 def set_unique_hostname():
     if not request.is_json:
@@ -151,12 +169,12 @@ def set_unique_hostname():
         if not hostname:
             raise NotFound(description="Missing 'hostname' in request body")
 
-        mac = get_device_mac()
+        res = get_device_mac()
 
-        if mac is None:
+        if res["status"] == "failed":
             raise RuntimeError("MAC address could not be determined from any interface")
 
-        mac_suffix = mac.replace(":", "")
+        mac_suffix = res["mac"].replace(":", "")
         new_hostname = f"{hostname}-{mac_suffix}"
 
         res = set_hostname(new_hostname)

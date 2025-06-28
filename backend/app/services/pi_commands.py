@@ -426,7 +426,11 @@ def get_device_mac():
         ble_output = subprocess.check_output(["hciconfig"], text=True)
         match = re.search(r"BD Address: ([0-9A-F:]{17})", ble_output)
         if match:
-            return match.group(1).lower()
+            return {
+                "status": "success",
+                "mac": match.group(1).lower(),
+                "message": "Fetched MAC successfully.",
+            }
     except subprocess.CalledProcessError:
         pass
 
@@ -441,11 +445,15 @@ def get_device_mac():
             )
             mac = result.stdout.strip()
             if mac and mac != "00:00:00:00:00:00":
-                return mac
+                return {
+                    "status": "success",
+                    "mac": mac,
+                    "message": "Fetched MAC successfully.",
+                }
         except subprocess.CalledProcessError:
             continue
 
-    return None
+    return {"status": "failed", "mac": None, "message": "Failed ti fetched MAC."}
 
 
 def set_hostname(hostname):
