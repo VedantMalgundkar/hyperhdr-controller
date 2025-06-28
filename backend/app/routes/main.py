@@ -156,7 +156,7 @@ def set_unique_hostname():
         if mac is None:
             raise RuntimeError("MAC address could not be determined from any interface")
 
-        mac_suffix = mac.replace(":", "")[-5:]
+        mac_suffix = mac.replace(":", "")
         new_hostname = f"{hostname}-{mac_suffix}"
 
         res = set_hostname(new_hostname)

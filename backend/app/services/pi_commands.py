@@ -422,20 +422,30 @@ def stop_ble_service():
 
 
 def get_device_mac():
-    interface_priority = ["eth0", "wlan0"]
-    mac = None
-    for iface in interface_priority:
-        result = subprocess.run(
-            ["cat", f"/sys/class/net/{iface}/address"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        if result.returncode == 0:
-            mac = result.stdout.strip()
-            break
+    try:
+        ble_output = subprocess.check_output(["hciconfig"], text=True)
+        match = re.search(r"BD Address: ([0-9A-F:]{17})", ble_output)
+        if match:
+            return match.group(1).lower()
+    except subprocess.CalledProcessError:
+        pass
 
-    return mac
+    for iface in ["eth0", "wlan0"]:
+        try:
+            result = subprocess.run(
+                ["cat", f"/sys/class/net/{iface}/address"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=True,
+            )
+            mac = result.stdout.strip()
+            if mac and mac != "00:00:00:00:00:00":
+                return mac
+        except subprocess.CalledProcessError:
+            continue
+
+    return None
 
 
 def set_hostname(hostname):
