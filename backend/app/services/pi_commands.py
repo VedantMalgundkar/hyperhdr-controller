@@ -391,6 +391,33 @@ def set_hostname(hostname):
         "details": result.stdout.strip()
     }
 
+def get_hostname():
+    try:
+        result = subprocess.run(
+            ["hostname"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True
+        )
+
+        return {
+            "status": "success",
+            "hostname": result.stdout.strip()
+        }
+
+    except subprocess.CalledProcessError as e:
+        return {
+            "status": "error",
+            "error": e.stderr.strip() if e.stderr else str(e)
+        }
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e)
+        }
+
 def restart_avahi_daemon():
     result = subprocess.run(["sudo", "systemctl", "restart", "avahi-daemon"], check=False)
     return {

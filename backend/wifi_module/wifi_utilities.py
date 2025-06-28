@@ -28,15 +28,25 @@ import json
 import threading
 from advertisement import Advertisement
 from service import Application, Service, Characteristic, Descriptor
-
+from app.services.pi_commands import get_hostname
 
 GATT_CHRC_IFACE = "org.bluez.GattCharacteristic1"
 
 class WifiAdvertisement(Advertisement):
     def __init__(self, index):
         Advertisement.__init__(self, index, "peripheral")
-        self.add_local_name("Wifi Setup")
+        self.add_local_name(self.getHostName())
         self.include_tx_power = True
+
+    def getHostName(self):
+        host_info = get_hostname()
+        if host_info["status"] == "success":
+            host = host_info["hostname"]
+            if "-" in host:
+                host = host.split("-")[0]
+            return host
+        else:
+            return "Wifi-Setup"
 
 class WifiScanningService(Service):
     WIFI_SVC_UUID = "00000001-710e-4a5b-8d75-3e5b444bc3cf"
