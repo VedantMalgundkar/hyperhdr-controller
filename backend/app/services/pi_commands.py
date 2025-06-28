@@ -313,6 +313,7 @@ def scan_wifi_around():
         ]
     ).decode("utf-8")
 
+    # Get list of saved (known) connections
     saved_output = subprocess.check_output(
         ["nmcli", "-t", "-f", "NAME", "connection", "show"]
     ).decode("utf-8")
@@ -331,21 +332,20 @@ def scan_wifi_around():
             signal = int(match.group(2).strip())
             security = match.group(3).strip() or "OPEN"
             in_use_field = match.group(4).strip()
-            in_use = True if in_use_field == "*" else False
+            in_use = 1 if in_use_field == "*" else 0
 
             if ssid:  # skip hidden/empty SSIDs
                 networks.append(
                     {
-                        "ssid": ssid,
-                        "signal": signal,
-                        "security": security,
-                        "in_use": in_use,
-                        "is_saved": ssid in saved_ssids,
+                        "s": ssid,
+                        "sr": signal,
+                        "lck": 1 if security != "OPEN" else 0,
+                        "u": in_use,
+                        "sav": 1 if ssid in saved_ssids else 0,
                     }
                 )
 
-    networks = sorted(networks, key=lambda x: x["in_use"], reverse=True)
-
+    networks = sorted(networks, key=lambda x: x["u"], reverse=True)
     return {
         "status": "success",
         "message": "Network fetched successfully",
