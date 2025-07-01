@@ -37,6 +37,7 @@ class WifiAdvertisement(Advertisement):
         Advertisement.__init__(self, index, "peripheral")
         self.add_local_name(self.getHostName())
         self.include_tx_power = True
+        self.add_service_uuid("00000001-710e-4a5b-8d75-3e5b444bc3cf")
 
     def getHostName(self):
         host_info = self.get_hostname()
