@@ -26,6 +26,7 @@ import re
 import subprocess
 import json
 import threading
+import time
 from advertisement import Advertisement
 from service import Application, Service, Characteristic, Descriptor
 
@@ -79,10 +80,12 @@ class WifiScanningService(Service):
         self.status_char = WifiStatusCharacteristic(self)
         self.scan_char = ScanWifiCharacteristic(self, self.status_char)
         self.ip_char = GetIpAdddrCharacteristic(self)
+        self.mac_char = GetMacCharacteristic(self)
 
         self.add_characteristic(self.status_char)
         self.add_characteristic(self.scan_char)
         self.add_characteristic(self.ip_char)
+        self.add_characteristic(self.mac_char)
 
 
 class ScanWifiCharacteristic(Characteristic):
@@ -188,38 +191,84 @@ class ScanWifiCharacteristic(Characteristic):
         return value
 
     def WriteValue(self, value, options):
+        
         try:
+            # Parse the data first
             data = json.loads(bytes(value).decode("utf-8"))
-            ssid = data.get("ssid")
-            password = data.get("password")
-            self.configure_wifi_nmcli(ssid, password)
-            self.connect_wifi_nmcli(ssid)
-
-            msg = {"status": "success", "message": f"Successfully connected to {ssid}"}
-            self.status_char.set_status(str(msg))
+            ssid = data.get("s")
+            password = data.get("p")
+            
+            # Validate input
+            if not ssid or not password:
+                raise ValueError("Missing SSID or password")
+            
+            # Set initial status
+            self.status_char.set_status(json.dumps({
+                "status": "connecting", 
+                "message": f"Connecting to {ssid}..."
+            }))
+            
+            # Start WiFi connection in background thread
+            def wifi_connection_task():
+                try:
+                    self.configure_wifi_nmcli(ssid, password)
+                    self.connect_wifi_nmcli(ssid)
+                    
+                    # Add a small delay to ensure connection is established
+                    time.sleep(2)
+                    
+                    result = subprocess.check_output(["hostname", "-I"], timeout=10)
+                    ip_str = result.decode("utf-8").strip().split()[0]
+                    
+                    success_msg = {
+                        "status": "success", 
+                        "message": f"Successfully connected to {ssid}",
+                        "ip_addr": ip_str
+                    }
+                    self.status_char.set_status(json.dumps(success_msg))
+                    
+                except subprocess.CalledProcessError as e:
+                    error_msg = {
+                        "status": "failed",
+                        "error": "Wi-Fi connection failed",
+                        "details": str(e)
+                    }
+                    self.status_char.set_status(json.dumps(error_msg))
+                    
+                except Exception as e:
+                    error_msg = {
+                        "status": "failed",
+                        "error": "Something went wrong",
+                        "details": str(e)
+                    }
+                    self.status_char.set_status(json.dumps(error_msg))
+            
+            # Start the background task
+            thread = threading.Thread(target=wifi_connection_task)
+            thread.daemon = True  # Dies when main thread dies
+            thread.start()
+            
+            return value
+        
         except json.JSONDecodeError as e:
-            msg = {
+            error_msg = {
                 "status": "failed",
-                "error": "Invalid JSON format:",
-                "details": str(e),
+                "error": "Invalid JSON format",
+                "details": str(e)
             }
-            self.status_char.set_status(str(msg))
-        except subprocess.CalledProcessError as e:
-            msg = {
-                "status": "failed",
-                "error": "Wi-Fi connection failed",
-                "details": e.stderr,
-            }
-            self.status_char.set_status(str(msg))
-        except Exception as e:
-            msg = {
-                "status": "failed",
-                "error": "Something went wrong.",
-                "details": str(e),
-            }
-            self.status_char.set_status(str(msg))
 
-        return value
+            self.status_char.set_status(json.dumps(error_msg))
+            return value
+            
+        except Exception as e:
+            error_msg = {
+                "status": "failed",
+                "error": "WriteValue error",
+                "details": str(e)
+            }
+            print(f"WriteValue error: {error_msg}")
+            self.status_char.set_status(json.dumps(error_msg))
+            return value
 
 
 class WifiStatusCharacteristic(Characteristic):
@@ -255,6 +304,60 @@ class GetIpAdddrCharacteristic(Characteristic):
 
     def ReadValue(self, options):
         self.get_ip_addr()
+        return self.value
+
+class GetMacCharacteristic(Characteristic):
+    MAC_UUID = "00000006-710e-4a5b-8d75-3e5b444bc3cf"
+
+    def __init__(self, service):
+        Characteristic.__init__(self, self.MAC_UUID, ["read"], service)
+        self.value = []
+
+    def get_device_mac(self):
+        try:
+            ble_output = subprocess.check_output(["hciconfig"], text=True)
+            match = re.search(r"BD Address: ([0-9A-F:]{17})", ble_output)
+            if match:
+                return {
+                    "status": "success",
+                    "mac": match.group(1).lower(),
+                    "message": "Fetched MAC successfully.",
+                }
+        except subprocess.CalledProcessError:
+            pass
+
+        for iface in ["eth0", "wlan0"]:
+            try:
+                result = subprocess.run(
+                    ["cat", f"/sys/class/net/{iface}/address"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    check=True,
+                )
+                mac = result.stdout.strip()
+                if mac and mac != "00:00:00:00:00:00":
+                    return {
+                        "status": "success",
+                        "mac": mac,
+                        "message": "Fetched MAC successfully.",
+                    }
+            except subprocess.CalledProcessError:
+                continue
+
+        return {"status": "failed", "mac": None, "message": "Failed ti fetched MAC."}
+
+    def get_mac_addr(self):
+        try:
+            result = self.get_device_mac()
+            mac_str = str(result.get("mac"))
+            self.value = [dbus.Byte(c.encode()) for c in mac_str]
+        except Exception as e:
+            print(f"Failed to get IP address: {e}")
+            self.value = []
+
+    def ReadValue(self, options):
+        self.get_mac_addr()
         return self.value
 
 
