@@ -128,7 +128,7 @@ class ScanWifiCharacteristic(Characteristic):
         )
 
     def connect_wifi_nmcli(self, ssid: str):
-        return subprocess.run(["sudo", "nmcli", "connection", "up", ssid], check=True)
+        return subprocess.run(["sudo", "nmcli", "connection", "up", ssid], check=True, capture_output=True)
 
     def get_nearby_wifi(self):
         output = subprocess.check_output(
@@ -228,11 +228,25 @@ class ScanWifiCharacteristic(Characteristic):
                     self.status_char.set_status(json.dumps(success_msg))
                     
                 except subprocess.CalledProcessError as e:
+
+                    stderr = e.stderr if isinstance(e.stderr, str) else e.stderr.decode("utf-8")
+                    stdout = e.stdout if isinstance(e.stdout, str) else e.stdout.decode("utf-8")
+
+                    if "psk: property is invalid" in stderr:
+                        error_type = "Invalid password"
+                    elif "secrets were required" in stderr or "encryption keys are required" in stdout:
+                        error_type = "Incorrect password"
+                    elif "network could not be found" in stderr:
+                        error_type = "Network not found"
+                    else:
+                        error_type = "Connection failed"
+
                     error_msg = {
                         "status": "failed",
-                        "error": "Wi-Fi connection failed",
-                        "details": str(e)
+                        "error": error_type,
+                        # "details": stderr.strip(),
                     }
+
                     self.status_char.set_status(json.dumps(error_msg))
                     
                 except Exception as e:
