@@ -275,16 +275,23 @@ class WifiStatusCharacteristic(Characteristic):
     WIFI_STATUS_UUID = "00000004-710e-4a5b-8d75-3e5b444bc3cf"
 
     def __init__(self, service):
-        Characteristic.__init__(self, self.WIFI_STATUS_UUID, ["read"], service)
+        Characteristic.__init__(self, self.WIFI_STATUS_UUID, ["read","notify"], service)
         self.value = []
+        self.notifying = False
 
     def set_status(self, message):
         self.value = [dbus.Byte(b) for b in message.encode("utf-8")]
-        self.PropertiesChanged(GATT_CHRC_IFACE, {"Value": self.value}, [])
+        if self.notifying:
+            self.PropertiesChanged(GATT_CHRC_IFACE, {"Value": self.value}, [])
 
     def ReadValue(self, options):
         return self.value
 
+    def StartNotify(self):
+        self.notifying = True
+
+    def StopNotify(self):
+        self.notifying = False
 
 class GetIpAdddrCharacteristic(Characteristic):
     IP_ADDR_UUID = "00000005-710e-4a5b-8d75-3e5b444bc3cf"
