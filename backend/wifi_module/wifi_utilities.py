@@ -20,6 +20,10 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
+import sys
+import os
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 import dbus
 import re
@@ -29,6 +33,7 @@ import threading
 import time
 from advertisement import Advertisement
 from service import Application, Service, Characteristic, Descriptor
+from backend.utils.shared_services import configure_wifi_nmcli,connect_wifi_nmcli,scan_wifi_around
 
 GATT_CHRC_IFACE = "org.bluez.GattCharacteristic1"
 
@@ -97,98 +102,19 @@ class ScanWifiCharacteristic(Characteristic):
         )
         self.status_char = status_char
 
-    def configure_wifi_nmcli(self, ssid: str, password: str):
-        return subprocess.run(
-            [
-                "sudo",
-                "nmcli",
-                "connection",
-                "add",
-                "type",
-                "wifi",
-                "con-name",
-                ssid,
-                "ssid",
-                ssid,
-                "ifname",
-                "wlan0",
-                "wifi-sec.key-mgmt",
-                "wpa-psk",
-                "wifi-sec.psk",
-                password,
-                "connection.autoconnect",
-                "yes",
-                "--",
-                "save",
-                "yes",
-            ],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-
-    def connect_wifi_nmcli(self, ssid: str):
-        return subprocess.run(["sudo", "nmcli", "connection", "up", ssid], check=True, capture_output=True)
-
-    def get_nearby_wifi(self):
-        output = subprocess.check_output(
-            [
-                "sudo",
-                "nmcli",
-                "-t",
-                "-f",
-                "SSID,SIGNAL,SECURITY,IN-USE",
-                "dev",
-                "wifi",
-                "list",
-            ]
-        ).decode("utf-8")
-
-        # Get list of saved (known) connections
-        saved_output = subprocess.check_output(
-            ["nmcli", "-t", "-f", "NAME", "connection", "show"]
-        ).decode("utf-8")
-
-        saved_ssids = set(
-            [line.strip() for line in saved_output.strip().split("\n") if line.strip()]
-        )
-
-        networks = []
-        pattern = re.compile(r"^(.*?):(\d+):([^:]*):?(.*)?$")
-
-        for line in output.strip().split("\n"):
-            match = pattern.match(line.strip())
-            if match:
-                ssid = match.group(1).strip()
-                signal = int(match.group(2).strip())
-                security = match.group(3).strip() or "OPEN"
-                in_use_field = match.group(4).strip()
-                in_use = 1 if in_use_field == "*" else 0
-
-                if ssid:  # skip hidden/empty SSIDs
-                    networks.append(
-                        {
-                            "s": ssid,
-                            "sr": signal,
-                            "lck": 1 if security != "OPEN" else 0,
-                            "u": in_use,
-                            "sav": 1 if ssid in saved_ssids else 0,
-                        }
-                    )
-
-        networks = sorted(networks, key=lambda x: x["u"], reverse=True)
-
-        json_str = json.dumps(networks)
-        value = [dbus.Byte(b) for b in json_str.encode("utf-8")]
-
-        return value
-
     def decode_dbus_array(self, value):
         return bytes(value).decode("utf-8")
 
     def ReadValue(self, options):
-        value = self.get_nearby_wifi()
-        return value
+        try:
+            res = scan_wifi_around()
+            networks = res.get("networks", [])
+            json_str = json.dumps(networks)
+            value = [dbus.Byte(b) for b in json_str.encode("utf-8")]
+            return value
+        except Exception as e:
+            print(f"Error in ReadValue: {e}")
+            return list("error".encode())
 
     def WriteValue(self, value, options):
         
@@ -211,8 +137,8 @@ class ScanWifiCharacteristic(Characteristic):
             # Start WiFi connection in background thread
             def wifi_connection_task():
                 try:
-                    self.configure_wifi_nmcli(ssid, password)
-                    self.connect_wifi_nmcli(ssid)
+                    configure_wifi_nmcli(ssid, password)
+                    connect_wifi_nmcli(ssid)
                     
                     # Add a small delay to ensure connection is established
                     time.sleep(2)

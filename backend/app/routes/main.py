@@ -9,12 +9,9 @@ from app.services.pi_commands import (
     enable_hyperhdr_service_on_boot,
     disable_hyperhdr_service_on_boot,
     boot_status_hyperhdr_service,
-    scan_wifi_around,
     get_connected_network,
     stop_hotspot,
     start_hotspot,
-    configure_wifi_nmcli,
-    connect_wifi_nmcli,
     start_hyperhdr_service,
     stop_hyperhdr_service,
     status_hyperhdr_service,
@@ -23,6 +20,8 @@ from app.services.pi_commands import (
     set_hostname,
     restart_systemctl_service,
 )
+from utils.shared_services import configure_wifi_nmcli,connect_wifi_nmcli,scan_wifi_around
+
 from pydantic import BaseModel, SecretStr, ValidationError
 
 
@@ -211,34 +210,20 @@ def connect_wifi():
         json_data = request.get_json()
 
         req = WifiRequest(**json_data)
-        print(req.ssid, "|", req.password)
         res = configure_wifi_nmcli(req.ssid, req.password)
-
-        stop_hotspot()
-
         res = connect_wifi_nmcli(req.ssid)
-        if res.get("status") and res.get("status") == "failed":
-            print(res)
-            raise Unauthorized("Invalid wifi password")
-
-        print(f"\n  connected to {req.ssid} >>>>>>>>>> \n")
-
         return (
             jsonify({"status": "success", "message": f"Connected to Wi-Fi {req.ssid}"}),
             200,
         )
-
     except ValidationError as e:
-        start_hotspot()
         return (
             jsonify({"status": "failed", "error": "Invalid data", "details": str(e)}),
             400,
         )
     except HTTPException as e:
-        start_hotspot()
         return jsonify({"status": "failed", "error": e.description}), e.code
     except subprocess.CalledProcessError as e:
-        start_hotspot()
         return (
             jsonify(
                 {
@@ -250,7 +235,6 @@ def connect_wifi():
             400,
         )
     except Exception as e:
-        start_hotspot()
         return (
             jsonify({"status": "failed", "error": "Server error", "details": str(e)}),
             500,
