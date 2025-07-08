@@ -20,10 +20,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
-import sys
-import os
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+import sys, os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import dbus
 import re
@@ -33,7 +31,7 @@ import threading
 import time
 from advertisement import Advertisement
 from service import Application, Service, Characteristic, Descriptor
-from backend.utils.shared_services import configure_wifi_nmcli,connect_wifi_nmcli,scan_wifi_around
+from utils.shared_services import configure_wifi_nmcli,connect_wifi_nmcli,scan_wifi_around
 
 GATT_CHRC_IFACE = "org.bluez.GattCharacteristic1"
 
@@ -104,14 +102,34 @@ class ScanWifiCharacteristic(Characteristic):
 
     def decode_dbus_array(self, value):
         return bytes(value).decode("utf-8")
+    
+    def safe_json_ble_payload(self, networks, max_bytes=450):
+        packed = []
+        total_bytes = 2
+
+        for i, net in enumerate(networks):
+            net_json = json.dumps(net, separators=(",", ":"))
+            net_bytes = len(net_json.encode("utf-8"))
+
+            if packed:
+                net_bytes += 1
+                
+            if total_bytes + net_bytes > max_bytes:
+                break
+
+            packed.append(net)
+            total_bytes += net_bytes
+
+        json_str = json.dumps(packed, separators=(",", ":"))
+        json_bytes = json_str.encode("utf-8")
+
+        return [dbus.Byte(b) for b in json_bytes]
 
     def ReadValue(self, options):
         try:
             res = scan_wifi_around()
             networks = res.get("networks", [])
-            json_str = json.dumps(networks)
-            value = [dbus.Byte(b) for b in json_str.encode("utf-8")]
-            return value
+            return self.safe_json_ble_payload(networks, max_bytes=450)
         except Exception as e:
             print(f"Error in ReadValue: {e}")
             return list("error".encode())
