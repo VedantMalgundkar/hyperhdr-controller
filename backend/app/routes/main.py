@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, abort
 import subprocess
 from flask import request
-from werkzeug.exceptions import HTTPException, Unauthorized, NotFound
+from werkzeug.exceptions import HTTPException, Unauthorized, NotFound, BadRequest
 from app.middlewares.req_modifier import modify_request, get_current_user
 from app.services.pi_commands import (
     start_ble_service,
@@ -20,10 +20,9 @@ from app.services.pi_commands import (
     set_hostname,
     restart_systemctl_service,
 )
-from utils.shared_services import configure_wifi_nmcli,connect_wifi_nmcli,scan_wifi_around
+from utils.shared_services import configure_wifi_nmcli,connect_wifi_nmcli,scan_wifi_around, delete_wifi_connection
 
 from pydantic import BaseModel, SecretStr, ValidationError
-
 
 class WifiRequest(BaseModel):
     ssid: str  # Wi-Fi network name (string)
@@ -240,6 +239,60 @@ def connect_wifi():
             500,
         )
 
+@main_bp.route("/del-wifi", methods=["POST"])
+def delete_wifi():
+    if not request.is_json:
+        return (
+            jsonify(
+                {
+                    "status": "failed",
+                    "error": "Unsupported Media Type",
+                    "details": "Content-Type must be application/json",
+                }
+            ),
+            415,
+        )
+
+    try:
+        json_data = request.get_json(silent=True)
+
+        if json_data is None:
+            raise BadRequest("Request body must be valid JSON.")
+
+        if not json_data.get("ssid"):
+            return (
+                jsonify(
+                    {
+                        "status": "failed",
+                        "error": "Network ssid not found",
+                        "details": "wifi ssid is required",
+                    }
+                ),
+                400,
+            )
+        res = delete_wifi_connection(json_data.get("ssid"))
+        return (
+            jsonify({"status": "success", "message": f"Deleted Wi-Fi {json_data.get('ssid')}"}),
+            200,
+        )
+    except HTTPException as e:
+        return jsonify({"status": "failed", "error": e.description}), e.code
+    except subprocess.CalledProcessError as e:
+        return (
+            jsonify(
+                {
+                    "status": "failed",
+                    "error": "Delete Wi-Fi connection failed",
+                    "details": e.stderr,
+                }
+            ),
+            400,
+        )
+    except Exception as e:
+        return (
+            jsonify({"status": "failed", "error": "Server error", "details": str(e)}),
+            500,
+        )
 
 @main_bp.route("/scan-wifi", methods=["GET"])
 def scan_wifi():

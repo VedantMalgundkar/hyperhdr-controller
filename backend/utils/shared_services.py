@@ -36,9 +36,10 @@ def configure_wifi_nmcli(ssid: str, password: str):
         "message": res.stdout.strip()
     }
 
-def connect_wifi_nmcli(ssid: str):
+def connect_wifi_nmcli(ssid: str,connect: bool = True):
+    action = "up" if connect else "down"
     res = subprocess.run(
-        ["sudo", "nmcli", "connection", "up", ssid],
+        ["sudo", "nmcli", "connection", action , ssid],
         check=True,
         capture_output=True,
         text=True
@@ -101,3 +102,12 @@ def scan_wifi_around():
         "networks": networks,
     }
 
+def delete_wifi_connection(connection_name: str) -> bool:
+    result = subprocess.run(
+        ['sudo', 'nmcli', 'connection', 'delete', connection_name],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True
+    )
+    return True
