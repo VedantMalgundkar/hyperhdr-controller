@@ -264,26 +264,31 @@ class writeWifiForgetCharacteristic(Characteristic):
 
             except subprocess.CalledProcessError as e:
                 stderr = e.stderr if isinstance(e.stderr, str) else e.stderr.decode("utf-8")
+                stdout = e.stdout if isinstance(e.stdout, str) else e.stdout.decode("utf-8")
 
-                if "Unknown connection" in stderr:
-                    error_type = "Connection not found"
-                elif "not allowed to execute" in stderr or "a password is required" in stderr:
+                combined_output = (stderr + stdout).lower()
+                
+                if "unknown connection" in combined_output:
+                    error_type = "Network is not saved"
+                elif "is not an active connection" in combined_output:
+                    error_type = f"{ssid} was not connected"
+                elif "not allowed to execute" in combined_output or "not authorized" in combined_output:
                     error_type = "Permission denied"
+                elif "device not managed" in combined_output:
+                    error_type = "Network device unmanaged"
+                elif "no such device" in combined_output:
+                    error_type = "Wi-Fi interface not found"
+                elif "failed to disconnect" in combined_output or "failed to deactivate" in combined_output:
+                    error_type = "Failed to disconnect"
+                elif "timeout" in combined_output:
+                    error_type = "Disconnection timed out"
                 else:
-                    error_type = "Deletion failed"
+                    error_type = "Disconnection failed"
 
                 error_msg = {
                     "status": "failed",
                     "error": error_type,
-                    "details": stderr
-                }
-                self.status_char.set_status(json.dumps(error_msg))
-
-            except Exception as e:
-                error_msg = {
-                    "status": "failed",
-                    "error": "Something went wrong",
-                    "details": str(e)
+                    # "details": combined_output.strip()
                 }
                 self.status_char.set_status(json.dumps(error_msg))
 
@@ -327,10 +332,10 @@ class writeWifiConnectCharacteristic(Characteristic):
                 stderr = e.stderr if isinstance(e.stderr, str) else e.stderr.decode("utf-8")
                 stdout = e.stdout if isinstance(e.stdout, str) else e.stdout.decode("utf-8")
 
-                combined_output = stderr + stdout
+                combined_output = (stderr + stdout).lower()
 
-                if "Unknown connection" in combined_output:
-                    error_type = "Connection not found"
+                if "unknown connection" in combined_output:
+                    error_type = "Network not found"
                 elif "not allowed to execute" in combined_output or "a password is required" in combined_output:
                     error_type = "Permission denied"
                 elif "secrets were required" in combined_output or "no secrets" in combined_output:
@@ -349,7 +354,7 @@ class writeWifiConnectCharacteristic(Characteristic):
                 error_msg = {
                     "status": "failed",
                     "error": error_type,
-                    "details": combined_output.strip()
+                    # "details": combined_output.strip()
                 }
                 self.status_char.set_status(json.dumps(error_msg))
 
@@ -401,29 +406,29 @@ class writeWifiDisconnectCharacteristic(Characteristic):
                 stderr = e.stderr if isinstance(e.stderr, str) else e.stderr.decode("utf-8")
                 stdout = e.stdout if isinstance(e.stdout, str) else e.stdout.decode("utf-8")
 
-                combined_output = stderr + stdout
+                combined_output = (stderr + stdout).lower()
 
-                if "Unknown connection" in combined_output:
+                if "unknown connection" in combined_output:
                     error_type = "Connection not found"
-                elif "not allowed to execute" in combined_output or "a password is required" in combined_output:
+                elif "is not an active connection" in combined_output:
+                    error_type = f"{ssid} was not connected"
+                elif "not allowed to execute" in combined_output or "not authorized" in combined_output:
                     error_type = "Permission denied"
-                elif "secrets were required" in combined_output or "no secrets" in combined_output:
-                    error_type = "Forget & connect again"
-                elif "Invalid wifi-password" in combined_output or "encryption keys" in combined_output:
-                    error_type = "Incorrect password"
-                elif "device not managed" in combined_output or "not available" in combined_output:
-                    error_type = "Network device unavailable"
-                elif "No suitable device found" in combined_output:
-                    error_type = "No Wi-Fi device found"
-                elif "connection activation failed" in combined_output:
-                    error_type = "Connection failed"
+                elif "device not managed" in combined_output:
+                    error_type = "Network device unmanaged"
+                elif "no such device" in combined_output:
+                    error_type = "Wi-Fi interface not found"
+                elif "failed to disconnect" in combined_output or "failed to deactivate" in combined_output:
+                    error_type = "Failed to disconnect"
+                elif "timeout" in combined_output:
+                    error_type = "Disconnection timed out"
                 else:
-                    error_type = "Connection failed"
+                    error_type = "Disconnection failed"
 
                 error_msg = {
                     "status": "failed",
                     "error": error_type,
-                    "details": combined_output.strip()
+                    # "details": combined_output.strip()
                 }
                 self.status_char.set_status(json.dumps(error_msg))
 
