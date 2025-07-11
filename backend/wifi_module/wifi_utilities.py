@@ -335,7 +335,7 @@ class writeWifiConnectCharacteristic(Characteristic):
                 combined_output = (stderr + stdout).lower()
 
                 if "unknown connection" in combined_output:
-                    error_type = "Network not found"
+                    error_type = "Network not found or not in range"
                 elif "not allowed to execute" in combined_output or "a password is required" in combined_output:
                     error_type = "Permission denied"
                 elif "secrets were required" in combined_output or "no secrets" in combined_output:
