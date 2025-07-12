@@ -37,9 +37,24 @@ def configure_wifi_nmcli(ssid: str, password: str):
     }
 
 def connect_wifi_nmcli(ssid: str,connect: bool = True):
-    action = "up" if connect else "down"
+    if connect:
+        saved = subprocess.run(
+            ["nmcli", "-t", "-f", "NAME", "connection", "show"],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        saved_connections = saved.stdout.strip().split("\n")
+
+        if ssid in saved_connections:
+            cmd = ["nmcli", "connection", "up", ssid]
+        else:
+            cmd = ["nmcli", "device", "wifi", "connect", ssid]
+    else:
+        cmd = ["nmcli", "connection", "down", ssid]
+
     res = subprocess.run(
-        ["sudo", "nmcli", "connection", action , ssid],
+        ["sudo"] + cmd,
         check=True,
         capture_output=True,
         text=True

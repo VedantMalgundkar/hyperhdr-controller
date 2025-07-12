@@ -32,6 +32,7 @@ import time
 from advertisement import Advertisement
 from service import Application, Service, Characteristic, Descriptor
 from utils.shared_services import configure_wifi_nmcli, connect_wifi_nmcli, scan_wifi_around, delete_wifi_connection
+from exceptions import InvalidWifiRequest
 
 GATT_CHRC_IFACE = "org.bluez.GattCharacteristic1"
 
@@ -82,9 +83,7 @@ class WifiScanningService(Service):
         Service.__init__(self, index, self.WIFI_SVC_UUID, True)
         self.status_char = WifiStatusCharacteristic(self)
         self.scan_char = ScanWifiCharacteristic(self, self.status_char)
-        self.wifi_forget_char = writeWifiForgetCharacteristic(self,self.status_char)
-        self.wifi_connect_char = writeWifiConnectCharacteristic(self,self.status_char)
-        self.wifi_disconnect_char = writeWifiDisconnectCharacteristic(self,self.status_char)
+        self.wifi_connect_char = writeWifiActionCharacteristic(self,self.status_char)
         self.ip_char = GetIpAdddrCharacteristic(self)
         self.mac_char = GetMacCharacteristic(self)
 
@@ -92,9 +91,7 @@ class WifiScanningService(Service):
         self.add_characteristic(self.scan_char)
         self.add_characteristic(self.ip_char)
         self.add_characteristic(self.mac_char)
-        self.add_characteristic(self.wifi_forget_char)
         self.add_characteristic(self.wifi_connect_char)
-        self.add_characteristic(self.wifi_disconnect_char)
 
 class ScanWifiCharacteristic(Characteristic):
     WIFI_CHARACTERISTIC_UUID = "00000003-710e-4a5b-8d75-3e5b444bc3cf"
@@ -233,220 +230,124 @@ class ScanWifiCharacteristic(Characteristic):
             self.status_char.set_status(json.dumps(error_msg))
             return value
 
-class writeWifiForgetCharacteristic(Characteristic):
-    WIFI_Forget_ACTION_UUID = "00000007-710e-4a5b-8d75-3e5b444bc3cf"
-
-    def __init__(self, service, status_char):
-        Characteristic.__init__(self, self.WIFI_Forget_ACTION_UUID, ["write"], service)
-        self.status_char = status_char
-    
-    def WriteValue(self, value, options):
-        try:
-            data = json.loads(bytes(value).decode("utf-8"))
-            ssid = data.get("s")
-            if not ssid:
-                raise ValueError("SSID is missing")
-            ssid = ssid.strip()
-
-            self.status_char.set_status(json.dumps({
-                "status": "Forgetting",
-                "message": f"Forgetting {ssid}..."
-            }))
-
-            try:
-                delete_wifi_connection(ssid)
-
-                success_msg = {
-                    "status": "success",
-                    "message": f"Forgotten {ssid}",
-                }
-                self.status_char.set_status(json.dumps(success_msg))
-
-            except subprocess.CalledProcessError as e:
-                stderr = e.stderr if isinstance(e.stderr, str) else e.stderr.decode("utf-8")
-                stdout = e.stdout if isinstance(e.stdout, str) else e.stdout.decode("utf-8")
-
-                combined_output = (stderr + stdout).lower()
-                
-                if "unknown connection" in combined_output:
-                    error_type = "Network is not saved"
-                elif "is not an active connection" in combined_output:
-                    error_type = f"{ssid} was not connected"
-                elif "not allowed to execute" in combined_output or "not authorized" in combined_output:
-                    error_type = "Permission denied"
-                elif "device not managed" in combined_output:
-                    error_type = "Network device unmanaged"
-                elif "no such device" in combined_output:
-                    error_type = "Wi-Fi interface not found"
-                elif "failed to disconnect" in combined_output or "failed to deactivate" in combined_output:
-                    error_type = "Failed to disconnect"
-                elif "timeout" in combined_output:
-                    error_type = "Disconnection timed out"
-                else:
-                    error_type = "Disconnection failed"
-
-                error_msg = {
-                    "status": "failed",
-                    "error": error_type,
-                    # "details": combined_output.strip()
-                }
-                self.status_char.set_status(json.dumps(error_msg))
-
-        except Exception as e:
-            self.status_char.set_status(json.dumps({
-                "status": "failed",
-                "error": "Invalid write value",
-                "details": str(e)
-            }))
-
-class writeWifiConnectCharacteristic(Characteristic):
+class writeWifiActionCharacteristic(Characteristic):
     WIFI_CONNECT_ACTION_UUID = "00000008-710e-4a5b-8d75-3e5b444bc3cf"
 
     def __init__(self, service, status_char):
         Characteristic.__init__(self, self.WIFI_CONNECT_ACTION_UUID, ["write"], service)
         self.status_char = status_char
-    
+
     def WriteValue(self, value, options):
         try:
-            data = json.loads(bytes(value).decode("utf-8"))
-            ssid = data.get("s")
-            if not ssid:
-                raise ValueError("SSID is missing")
-            ssid = ssid.strip()
+            # Decode and parse JSON from value
+            raw = bytes(value).decode("utf-8")
+            data = json.loads(raw)
 
-            self.status_char.set_status(json.dumps({
-                "status": "Connecting",
-                "message": f"Connecting to {ssid}..."
-            }))
+            ssid = data.get("s", "").strip()
+            action = data.get("a", "").strip()
 
-            try:
+            if not ssid or not action:
+                raise InvalidWifiRequest("Missing SSID or Action")
+
+            if action not in ["add","sub","del"]:
+                raise InvalidWifiRequest("Invalid Action")
+            
+            action_msg_res = {}
+
+            if action == "add":
+                action_msg_res["status"] = "connecting"
+                action_msg_res["message"] = f"Connecting to {ssid}..."
+            elif action == "sub":
+                action_msg_res["status"] = "disconnecting"
+                action_msg_res["message"] = f"Disconnecting from {ssid}..."
+            elif action == "del":
+                action_msg_res["status"] = "forgetting"
+                action_msg_res["message"] = f"Forgetting {ssid}..."
+
+            # Notify client that connection is starting
+            self._safe_set_status(action_msg_res)
+
+            # Start connection in a background thread
+            threading.Thread(
+                target=self._handle_task,
+                args=(ssid,action),
+                daemon=True
+            ).start()
+
+        except json.JSONDecodeError as e:
+            self._safe_set_status({
+                "status": "failed",
+                "error": "Invalid JSON format",
+                "details": str(e)
+            })
+
+        except InvalidWifiRequest as e:
+            self._safe_set_status({
+                "status": "failed",
+                "error": e.message,
+            })
+        except Exception as e:
+            self._safe_set_status({
+                "status": "failed",
+                "error": "WriteValue error",
+                "details": str(e)
+            })
+
+    def _handle_task(self, ssid, action):
+        action_msg_res = {}
+        try:
+            if action == "add":
                 connect_wifi_nmcli(ssid)
-
-                success_msg = {
-                    "status": "success",
-                    "message": f"Connected to {ssid}",
-                }
-                self.status_char.set_status(json.dumps(success_msg))
-
-            except subprocess.CalledProcessError as e:
-                stderr = e.stderr if isinstance(e.stderr, str) else e.stderr.decode("utf-8")
-                stdout = e.stdout if isinstance(e.stdout, str) else e.stdout.decode("utf-8")
-
-                combined_output = (stderr + stdout).lower()
-
-                if "unknown connection" in combined_output:
-                    error_type = "Network not found or not in range"
-                elif "not allowed to execute" in combined_output or "a password is required" in combined_output:
-                    error_type = "Permission denied"
-                elif "secrets were required" in combined_output or "no secrets" in combined_output:
-                    error_type = "Forget & connect again"
-                elif "Invalid wifi-password" in combined_output or "encryption keys" in combined_output:
-                    error_type = "Incorrect password"
-                elif "device not managed" in combined_output or "not available" in combined_output:
-                    error_type = "Network device unavailable"
-                elif "No suitable device found" in combined_output:
-                    error_type = "No Wi-Fi device found"
-                elif "connection activation failed" in combined_output:
-                    error_type = "Connection failed"
-                else:
-                    error_type = "Connection failed"
-
-                error_msg = {
-                    "status": "failed",
-                    "error": error_type,
-                    # "details": combined_output.strip()
-                }
-                self.status_char.set_status(json.dumps(error_msg))
-
-            except Exception as e:
-                error_msg = {
-                    "status": "failed",
-                    "error": "Something went wrong",
-                    "details": str(e)
-                }
-                self.status_char.set_status(json.dumps(error_msg))
-
-        except Exception as e:
-            self.status_char.set_status(json.dumps({
-                "status": "failed",
-                "error": "Invalid write value",
-                "details": str(e)
-            }))
-
-class writeWifiDisconnectCharacteristic(Characteristic):
-    WIFI_DISCONNECT_ACTION_UUID = "00000009-710e-4a5b-8d75-3e5b444bc3cf"
-
-    def __init__(self, service, status_char):
-        Characteristic.__init__(self, self.WIFI_DISCONNECT_ACTION_UUID, ["write"], service)
-        self.status_char = status_char
-    
-    def WriteValue(self, value, options):
-        try:
-            data = json.loads(bytes(value).decode("utf-8"))
-            ssid = data.get("s")
-            if not ssid:
-                raise ValueError("SSID is missing")
-            ssid = ssid.strip()
-
-            self.status_char.set_status(json.dumps({
-                "status": "Disconnecting",
-                "message": f"Disconnecting to {ssid}..."
-            }))
-
-            try:
+                action_msg_res["message"] = f"Connected to {ssid}"
+            elif action == "sub":
                 connect_wifi_nmcli(ssid,False)
+                action_msg_res["message"] = f"Disconnected from {ssid}..."
+            elif action == "del":
+                delete_wifi_connection(ssid)
+                action_msg_res["message"] = f"Forgotten {ssid}"
 
-                success_msg = {
-                    "status": "success",
-                    "message": f"Disconnected to {ssid}",
-                }
-                self.status_char.set_status(json.dumps(success_msg))
+            action_msg_res["status"] = "success"
+            self._safe_set_status(action_msg_res)
 
-            except subprocess.CalledProcessError as e:
-                stderr = e.stderr if isinstance(e.stderr, str) else e.stderr.decode("utf-8")
-                stdout = e.stdout if isinstance(e.stdout, str) else e.stdout.decode("utf-8")
+        except subprocess.CalledProcessError as e:
+            stderr = e.stderr if isinstance(e.stderr, str) else e.stderr.decode("utf-8", errors="ignore")
+            stdout = e.stdout if isinstance(e.stdout, str) else e.stdout.decode("utf-8", errors="ignore")
 
-                combined_output = (stderr + stdout).lower()
+            combined_output = (stderr + stdout).lower()
 
-                if "unknown connection" in combined_output:
-                    error_type = "Connection not found"
-                elif "is not an active connection" in combined_output:
-                    error_type = f"{ssid} was not connected"
-                elif "not allowed to execute" in combined_output or "not authorized" in combined_output:
-                    error_type = "Permission denied"
-                elif "device not managed" in combined_output:
-                    error_type = "Network device unmanaged"
-                elif "no such device" in combined_output:
-                    error_type = "Wi-Fi interface not found"
-                elif "failed to disconnect" in combined_output or "failed to deactivate" in combined_output:
-                    error_type = "Failed to disconnect"
-                elif "timeout" in combined_output:
-                    error_type = "Disconnection timed out"
-                else:
-                    error_type = "Disconnection failed"
+            if "cannot delete unknown connection" in combined_output:
+                error_type = "Network is not saved"
+            elif "is not an active connection" in combined_output or "is not an active connection" in combined_output:
+                error_type = "Network is not connected"
+            elif "unknown connection" in combined_output or "network could not be found" in combined_output:
+                error_type = "Network not found or not in range"
+            elif "device not managed" in combined_output or "not available" in combined_output:
+                error_type = "Network device unavailable"
+            elif "secrets were required" in combined_output or "passwords or encryption keys are required" in combined_output:
+                error_type = "Retry with password or forget network"
+            elif "connection activation failed" in combined_output:
+                error_type = "Connection failed"
+            else:
+                error_type = "Connection failed"
 
-                error_msg = {
-                    "status": "failed",
-                    "error": error_type,
-                    # "details": combined_output.strip()
-                }
-                self.status_char.set_status(json.dumps(error_msg))
-
-            except Exception as e:
-                error_msg = {
-                    "status": "failed",
-                    "error": "Something went wrong",
-                    "details": str(e)
-                }
-                self.status_char.set_status(json.dumps(error_msg))
+            self._safe_set_status({
+                "status": "failed",
+                "error": error_type
+            })
 
         except Exception as e:
-            self.status_char.set_status(json.dumps({
+            self._safe_set_status({
                 "status": "failed",
-                "error": "Invalid write value",
+                "error": "Something went wrong",
                 "details": str(e)
-            }))
+            })
 
+    def _safe_set_status(self, status_dict):
+        try:
+            status_json = json.dumps(status_dict)
+            self.status_char.set_status(status_json)
+        except Exception:
+            print("Failed to set status:")
 
 class WifiStatusCharacteristic(Characteristic):
     WIFI_STATUS_UUID = "00000004-710e-4a5b-8d75-3e5b444bc3cf"
