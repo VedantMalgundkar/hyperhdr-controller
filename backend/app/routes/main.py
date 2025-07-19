@@ -20,9 +20,15 @@ from app.services.pi_commands import (
     set_hostname,
     restart_systemctl_service,
 )
-from utils.shared_services import configure_wifi_nmcli,connect_wifi_nmcli,scan_wifi_around, delete_wifi_connection
+from utils.shared_services import (
+    configure_wifi_nmcli,
+    connect_wifi_nmcli,
+    scan_wifi_around,
+    delete_wifi_connection,
+)
 
 from pydantic import BaseModel, SecretStr, ValidationError
+
 
 class WifiRequest(BaseModel):
     ssid: str  # Wi-Fi network name (string)
@@ -239,6 +245,7 @@ def connect_wifi():
             500,
         )
 
+
 @main_bp.route("/del-wifi", methods=["POST"])
 def delete_wifi():
     if not request.is_json:
@@ -272,7 +279,12 @@ def delete_wifi():
             )
         res = delete_wifi_connection(json_data.get("ssid"))
         return (
-            jsonify({"status": "success", "message": f"Deleted Wi-Fi {json_data.get('ssid')}"}),
+            jsonify(
+                {
+                    "status": "success",
+                    "message": f"Deleted Wi-Fi {json_data.get('ssid')}",
+                }
+            ),
             200,
         )
     except HTTPException as e:
@@ -293,6 +305,7 @@ def delete_wifi():
             jsonify({"status": "failed", "error": "Server error", "details": str(e)}),
             500,
         )
+
 
 @main_bp.route("/scan-wifi", methods=["GET"])
 def scan_wifi():

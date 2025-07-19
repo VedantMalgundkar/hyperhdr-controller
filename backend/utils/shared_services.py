@@ -1,6 +1,7 @@
 import re
 import subprocess
 
+
 def configure_wifi_nmcli(ssid: str, password: str):
     # Add or update the connection profile
     res = subprocess.run(
@@ -31,18 +32,16 @@ def configure_wifi_nmcli(ssid: str, password: str):
         text=True,
         check=True,
     )
-    return {
-        "status": "success",
-        "message": res.stdout.strip()
-    }
+    return {"status": "success", "message": res.stdout.strip()}
 
-def connect_wifi_nmcli(ssid: str,connect: bool = True):
+
+def connect_wifi_nmcli(ssid: str, connect: bool = True):
     if connect:
         saved = subprocess.run(
             ["nmcli", "-t", "-f", "NAME", "connection", "show"],
             capture_output=True,
             text=True,
-            check=True
+            check=True,
         )
         saved_connections = saved.stdout.strip().split("\n")
 
@@ -53,16 +52,9 @@ def connect_wifi_nmcli(ssid: str,connect: bool = True):
     else:
         cmd = ["nmcli", "connection", "down", ssid]
 
-    res = subprocess.run(
-        ["sudo"] + cmd,
-        check=True,
-        capture_output=True,
-        text=True
-    )
-    return {
-        "status": "success",
-        "message": res.stdout.strip()
-    }
+    res = subprocess.run(["sudo"] + cmd, check=True, capture_output=True, text=True)
+    return {"status": "success", "message": res.stdout.strip()}
+
 
 def scan_wifi_around():
     output = subprocess.check_output(
@@ -117,12 +109,13 @@ def scan_wifi_around():
         "networks": networks,
     }
 
+
 def delete_wifi_connection(connection_name: str) -> bool:
     result = subprocess.run(
-        ['sudo', 'nmcli', 'connection', 'delete', connection_name],
+        ["sudo", "nmcli", "connection", "delete", connection_name],
         check=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True
+        text=True,
     )
     return True

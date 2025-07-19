@@ -4,6 +4,7 @@ import psutil
 import time
 import requests
 import subprocess
+from collections import defaultdict
 from .release_cache import save_to_releases_json, load_from_releases_json
 from dotenv import load_dotenv
 
@@ -30,36 +31,23 @@ def _get_service_status(service_name, type="status"):
     return result.stdout.strip()
 
 
-def fetch_github_versions():
-    """Fetch HyperHDR releases from GitHub with version, description, and Raspberry Pi 64-bit .deb download link."""
+def fetch_github_versions(fetch_bookworm: bool = False):
+    """Fetch HyperHDR releases with architecture- and Bookworm-aware filtering."""
 
     CACHE_TTL = 24 * 60 * 60
     current_time = time.time()
     res = load_from_releases_json()
 
-    ver_res = {}
+    try:
+        ver_res = get_hyperhdr_version()
+    except Exception as e:
+        ver_res = {
+            "status": "failed",
+            "version": None,
+            "error": f"Command failed: {str(e)}",
+        }
+
     if res:
-        try:
-            ver_res = get_hyperhdr_version()
-        except Exception as e:
-            ver_res = {
-                "status": "failed",
-                "version": None,
-                "error": f"Command failed: {str(e)}",
-            }
-
-        version_tag = f"v{ver_res.get('version')}" if ver_res.get("version") else None
-
-        if "releases" in res and isinstance(res["releases"], list):
-            res["releases"] = [
-                {
-                    **release,
-                    "is_installed": version_tag is not None
-                    and release.get("version") == version_tag,
-                }
-                for release in res["releases"]
-            ]
-
         if "created_at" in res and (current_time - res["created_at"]) < CACHE_TTL:
             return {
                 "status": "success",
@@ -71,45 +59,51 @@ def fetch_github_versions():
     response.raise_for_status()
 
     releases = response.json()
-    result = []
+    grouped = defaultdict(list)
 
     for release in releases:
-        version = release.get("tag_name")
-        if "beta" in version:
-            continue
-        name = release.get("name")
-        published_at = release.get("published_at")
-        assets = release.get("assets", [])
-        filterted_assets = []
-
-        for asset in assets:
-            name = asset.get("name", "").lower()
-            if name.endswith(".deb") and ("aarch64" in name or "arm64" in name):
-                filterted_assets.append(
-                    {
-                        "name": asset.get("name", ""),
-                        "size": asset.get("size", ""),
-                        "download_count": asset.get("download_count", ""),
-                        "browser_download_url": asset.get("browser_download_url", ""),
-                        "created_at": asset.get("created_at", ""),
-                        "updated_at": asset.get("updated_at", ""),
-                    }
-                )
-
-        if len(filterted_assets) == 0:
+        tag_name = release.get("tag_name", "")
+        if "beta" in tag_name.lower():
             continue
 
-        filterted_assets.sort(key=lambda x: "bookworm" not in x["name"].lower())
+        for asset in release.get("assets", []):
+            asset_name = asset.get("name", "").lower()
 
-        result.append(
-            {
-                "version": version,
-                "name": name,
-                "published_at": published_at,
-                "assets": filterted_assets,
-                "is_installed": f"v{ver_res.get('version')}" == version,
-            }
-        )
+            if not asset_name.endswith(".deb"):
+                continue
+            if "arm64" not in asset_name and "aarch64" not in asset_name:
+                continue
+
+            grouped[tag_name].append(
+                {
+                    "id": asset.get("id", ""),
+                    "file_name": asset.get("name", ""),
+                    "size": asset.get("size", ""),
+                    "download_count": asset.get("download_count", ""),
+                    "browser_download_url": asset.get("browser_download_url", ""),
+                    "created_at": asset.get("created_at", ""),
+                    "updated_at": asset.get("updated_at", ""),
+                    "tag_name": tag_name,
+                    "release_name": release.get("name", ""),
+                    "is_installed": f"v{ver_res.get('version')}" == tag_name,
+                }
+            )
+
+    result = []
+
+    for tag, assets in grouped.items():
+        has_bookworm = any("bookworm" in a["file_name"].lower() for a in assets)
+
+        if not has_bookworm:
+            result.extend(assets)
+        else:
+            for asset in assets:
+                is_bookworm = "bookworm" in asset["file_name"].lower()
+
+                if fetch_bookworm and is_bookworm:
+                    result.append(asset)
+                elif not fetch_bookworm and not is_bookworm:
+                    result.append(asset)
 
     save_to_releases_json({"releases": result, "created_at": current_time})
 
@@ -117,6 +111,35 @@ def fetch_github_versions():
         "status": "success",
         "message": "Version fetched successfully",
         "versions": result,
+    }
+
+
+def get_system_info():
+    command = "uname -m && (cat /etc/os-release || cat /etc/*release || lsb_release -a)"
+    result = subprocess.run(
+        command, shell=True, capture_output=True, text=True, check=True
+    )
+
+    output = result.stdout.strip().splitlines()
+
+    data = {}
+    if output:
+        # First line is architecture
+        data["ARCH"] = output[0].strip()
+
+        # Remaining lines are OS info
+        for line in output[1:]:
+            if "=" in line:
+                key, val = line.split("=", 1)
+                data[key.strip()] = val.strip().strip('"')
+            elif ":" in line:
+                key, val = line.split(":", 1)
+                data[key.strip().upper()] = val.strip()
+
+    return {
+        "status": "success",
+        "message": "Fetched system info successfully",
+        "data": data,
     }
 
 
@@ -253,6 +276,7 @@ def stop_hotspot():
             return {"status": "success", "message": f"Hotspot '{name}' stopped."}
 
     return {"status": "error", "message": "No active hotspot found."}
+
 
 def get_connected_network():
     ssid = (

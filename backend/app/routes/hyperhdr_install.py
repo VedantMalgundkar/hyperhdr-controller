@@ -16,6 +16,7 @@ from app.services.pi_commands import (
     stop_hyperhdr_service,
     uninstall_current_hyper_hdr_service,
     fetch_github_versions,
+    get_system_info,
 )
 
 hyperhdr_install_bp = Blueprint("hyperhdr_install", __name__)
@@ -166,9 +167,22 @@ def get_current_hyperhdr_version():
 @hyperhdr_install_bp.route("/avl-versions", methods=["GET"])
 def get_hyperhdr_versions():
     try:
-        github_versions = fetch_github_versions()
+        ver_res = get_system_info()
+
+        ver_data = ver_res.get("data")
+
+        github_versions = fetch_github_versions(
+            ver_data.get("VERSION_CODENAME") == "bookworm"
+        )
 
         return jsonify(github_versions), 200
+    except subprocess.CalledProcessError as e:
+        return (
+            jsonify(
+                {"status": "failed", "message": f"Command failed: {e}", "data": None}
+            ),
+            400,
+        )
     except Exception as e:
         return (
             jsonify({"success": "failed", "error": f"Error checking status: {str(e)}"}),
