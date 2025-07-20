@@ -49,6 +49,30 @@ def fetch_github_versions(fetch_bookworm: bool = False):
 
     if res:
         if "created_at" in res and (current_time - res["created_at"]) < CACHE_TTL:
+
+            if ver_res.get("version"):
+                new_vers = []
+                for release in res["releases"]:
+                    local_release = {
+                        **release,
+                    }
+                    if "hyperhdr" not in release.get("release_name", "").lower():
+                        clean_tag = re.sub(r"[^0-9.]", "", release["tag_name"])
+                        local_release = {
+                            **local_release,
+                            "release_name": f"HyperHDR {clean_tag}",
+                        }
+
+                    if release["tag_name"] == f"v{ver_res.get('version')}":
+                        local_release = {
+                            **local_release,
+                            "is_installed": True,
+                        }
+
+                    new_vers.append(local_release)
+
+                res["releases"] = new_vers
+
             return {
                 "status": "success",
                 "message": "Version fetched successfully",
