@@ -76,10 +76,10 @@ def fetch_github_versions(fetch_bookworm: bool = False):
 
             grouped[tag_name].append(
                 {
-                    "id": asset.get("id", ""),
+                    "id": str(asset.get("id", "")),
                     "file_name": asset.get("name", ""),
-                    "size": asset.get("size", ""),
-                    "download_count": asset.get("download_count", ""),
+                    "size": str(asset.get("size", "")),
+                    "download_count": str(asset.get("download_count", "")),
                     "browser_download_url": asset.get("browser_download_url", ""),
                     "created_at": asset.get("created_at", ""),
                     "updated_at": asset.get("updated_at", ""),
