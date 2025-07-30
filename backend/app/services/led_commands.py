@@ -109,3 +109,48 @@ def apply_hyperhdr_effect(effect_name: str, duration_ms: int = 0):
     response = requests.post(url, json=payload)
     response.raise_for_status()
     return response.json()
+
+def check_input_signal():
+    """
+    Check if the USB video grabber connected to HyperHDR has a valid HDMI signal.
+
+    Returns:
+        dict: {
+            "signalDetected": bool,
+            "width": int,
+            "height": int,
+            "fps": int,
+            "message": str
+        }
+    """
+    url = f"{base_url}/json-rpc"
+    payload = {
+        "command": "serverinfo"
+    }
+
+    response = requests.post(url, json=payload)
+    response.raise_for_status()
+    data = response.json()
+
+    signal = None
+    width = None
+    height = None
+    fps = None
+
+    if data.get("success") and isinstance(data.get("info", {}).get("grabber"), list):
+        grabbers = data["info"]["grabber"]
+        if grabbers:
+            g = grabbers[0]
+            width = g.get("width", 0)
+            height = g.get("height", 0)
+            fps = g.get("fps", 0)
+            signal = width > 0 and height > 0 and fps > 0
+
+    return {
+        "success": data.get("success", False),
+        "signalDetected": signal,
+        "width": width,
+        "height": height,
+        "fps": fps,
+        # "data": data
+    }

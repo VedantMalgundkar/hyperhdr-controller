@@ -8,9 +8,12 @@ from app.services.led_commands import (
     apply_hyperhdr_effect,
     clear_hyperhdr_effect,
     get_current_brightness,
+    check_input_signal,
 )
 
 led_bp = Blueprint("led", __name__)
+
+currently_running_effect = ""
 
 @led_bp.route("/adjust-brightness", methods=["POST"])
 def adjust_brightness():
@@ -81,8 +84,20 @@ def get_effects():
     except Exception as e:
         return jsonify({"status": "failed", "error": f"Unexpected error: {str(e)}"}), 500
 
+@led_bp.route("/get-current-effect", methods=["GET"])
+def get_current_effect():
+    print(currently_running_effect)
+    return jsonify({
+        "status": "success",
+        "data": {
+            "current_effect": None if currently_running_effect == "" else currently_running_effect 
+        },
+        "message": "Fetched current effect successfully"
+    }), 200
+
 @led_bp.route("/apply-effect", methods=["POST"])
 def apply_effect():
+    global currently_running_effect
     try:
         body = request.get_json()
 
@@ -90,6 +105,13 @@ def apply_effect():
         
         if effect is None:
             raise NotFound(description="Missing 'effect' in request body")
+        
+        if currently_running_effect == effect:
+            return jsonify({
+                "status": "success",
+                "data": None,
+                "message": "Effect already running"
+            }), 200
 
         avl_effects = get_hyperhdr_effects()
 
@@ -99,6 +121,8 @@ def apply_effect():
             raise BadRequest(description="Unknown Effect")
 
         res = apply_hyperhdr_effect(effect)
+
+        currently_running_effect = effect
 
         return jsonify({
             "status": "success",
@@ -121,7 +145,11 @@ def apply_effect():
 @led_bp.route("/stop-effect", methods=["POST"])
 def stop_effect():
     try:
+        global currently_running_effect
+
         res = clear_hyperhdr_effect()
+
+        currently_running_effect = ""
         
         return jsonify({
             "status": "success",
@@ -134,3 +162,26 @@ def stop_effect():
 
     except Exception as e:
         return jsonify({"status": "failed", "error": f"Unexpected error: {str(e)}"}), 500
+
+
+@led_bp.route("/get-active-signal", methods=["GET"])
+def get_active_signal():
+    try:
+        res = check_input_signal()
+        
+        return jsonify({
+            "status": "success",
+            "data": res,
+            "message": "Fetched active input successfully"
+        }), 200
+
+    except RequestException as e:
+        return jsonify({"status": "failed", "error": f"API failed: {str(e)}"}), 500
+
+    except Exception as e:
+        return jsonify({"status": "failed", "error": f"Unexpected error: {str(e)}"}), 500
+
+
+
+
+    
