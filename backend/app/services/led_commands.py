@@ -111,18 +111,6 @@ def apply_hyperhdr_effect(effect_name: str, duration_ms: int = 0):
     return response.json()
 
 def check_input_signal():
-    """
-    Check if the USB video grabber connected to HyperHDR has a valid HDMI signal.
-
-    Returns:
-        dict: {
-            "signalDetected": bool,
-            "width": int,
-            "height": int,
-            "fps": int,
-            "message": str
-        }
-    """
     url = f"{base_url}/json-rpc"
     payload = {
         "command": "serverinfo"
@@ -132,25 +120,79 @@ def check_input_signal():
     response.raise_for_status()
     data = response.json()
 
-    signal = None
-    width = None
-    height = None
-    fps = None
+    priorities = data.get('info', {}).get('priorities')
+    if not priorities:
+        return {"status": "failed", error: "priorities are missing in serverinfo"}
 
-    if data.get("success") and isinstance(data.get("info", {}).get("grabber"), list):
-        grabbers = data["info"]["grabber"]
-        if grabbers:
-            g = grabbers[0]
-            width = g.get("width", 0)
-            height = g.get("height", 0)
-            fps = g.get("fps", 0)
-            signal = width > 0 and height > 0 and fps > 0
+    current_input = {}
+    valid_effects = [effect["name"] for effect in get_hyperhdr_effects()]
+    
+    for priority in priorities:
+        usb_owner = "usb" in priority.get("owner","").lower()
+        is_valid_effect = priority.get("owner","") in valid_effects
+        
+        if priority["visible"] and not usb_owner:
+            current_input = { **priority, "value": priority.get("owner","") } if is_valid_effect else priority
+            break
 
-    return {
-        "success": data.get("success", False),
-        "signalDetected": signal,
-        "width": width,
-        "height": height,
-        "fps": fps,
-        # "data": data
+    return current_input
+
+def check_capture_card_signal():
+    url = f"{base_url}/json-rpc"
+    payload = {
+        "command": "serverinfo"
     }
+
+    response = requests.post(url, json=payload)
+    response.raise_for_status()
+    data = response.json()
+
+    priorities = data.get('info', {}).get('priorities')
+    if not priorities:
+        return {"status": "failed", error: "priorities are missing in serverinfo"}
+
+    capture_card = {}
+
+    for priority in priorities:
+        if "usb" in priority.get("owner","").lower():
+            capture_card = priority
+            break
+    
+    return capture_card
+
+def set_signal_detection(enabled: bool):
+    url = f"{base_url}/json-rpc"
+
+    grabber_on = {
+        "command": "componentstate",
+        "componentstate": {
+            "component": "VIDEOGRABBER",
+            "state": enabled
+        }
+    }
+    res = requests.post(url, json = grabber_on)
+    print(f"{'Enabled' if enabled else 'Disabled'} signal detection:", res.json())
+    return res.json()
+
+def apply_hyperhdr_color(rgb: list[int], duration_ms: int = 0):
+    """
+    Apply a static color to HyperHDR.
+
+    Args:
+        rgb (list[int]): List with RGB values (e.g., [255, 0, 0] for red).
+        duration_ms (int): Duration in milliseconds. 0 means infinite.
+
+    Returns:
+        dict: JSON response from HyperHDR.
+    """
+    url = f"{base_url}/json-rpc"
+    payload = {
+        "command": "color",
+        "color": rgb,
+        "priority": 100,
+        "duration": duration_ms
+    }
+
+    response = requests.post(url, json=payload)
+    response.raise_for_status()
+    return response.json()
