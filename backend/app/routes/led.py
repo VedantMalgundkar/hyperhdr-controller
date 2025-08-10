@@ -166,20 +166,11 @@ def apply_color():
 
         is_color_running = active_signal.get("componentId","").lower() == "color"
         
-        if is_color_running and active_signal["value"].get("RGB",[]) == color:
+        if is_color_running and isinstance(active_signal["value"], dict) and active_signal["value"].get("RGB",[]) == color:
             return jsonify({
                 "status": "success",
                 "data": None,
                 "message": "Color already applied"
-            }), 200
-
-        currently_running_color = active_signal.get("value",{}).get("RGB",[])
-        
-        if currently_running_color == color:
-            return jsonify({
-                "status": "success",
-                "data": None,
-                "message": "color already applied."
             }), 200
 
         res = apply_hyperhdr_color(color)

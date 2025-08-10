@@ -65,7 +65,10 @@ def get_hyperhdr_effects():
     data = response.json()
 
     effects = data.get("info", {}).get("effects", [])
-    return effects
+
+    filtered_effects = [effect for effect in effects if not effect['name'].lower().startswith("music")]
+
+    return filtered_effects
 
 def clear_hyperhdr_effect(priority: int = 100):
     """
