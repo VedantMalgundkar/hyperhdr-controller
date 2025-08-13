@@ -1,6 +1,53 @@
+import json
+import asyncio
 import requests
+import websockets
 
-base_url = "http://localhost:8090"
+HOST = "localhost"
+PORT = 8090
+TAN = 1
+
+base_url = f"http://{HOST}:{PORT}"
+ws_url = f"ws://{HOST}:{PORT}"
+
+async def get_led_stream():
+    uri = f"ws://{HOST}:{PORT}"
+    led_data = None
+    async with websockets.connect(uri) as ws:
+
+        # 1. Start LED colors stream
+        start_msg = {
+            "command": "ledcolors",
+            "subcommand": "ledstream-start",
+            "tan": TAN
+        }
+
+        await ws.send(json.dumps(start_msg))
+
+        try:
+            for _ in range(10):
+                msg = await ws.recv()
+                try:
+                    data = json.loads(msg)
+                    if data.get('command', '') == "ledcolors-ledstream-update":
+                        led_data = data  
+                        break
+                except json.JSONDecodeError:
+                    print("[Binary frame received]", type(msg), len(msg))
+
+        finally:
+            # 3. Stop LED colors stream
+            stop_msg = {
+                "command": "ledcolors",
+                "subcommand": "ledstream-stop",
+                "tan": TAN
+            }
+            await ws.send(json.dumps(stop_msg))
+
+            # 4. Close connection
+            await ws.close()
+        
+        return led_data
 
 def set_hyperhdr_brightness(brightness: int):
     """
@@ -199,3 +246,57 @@ def apply_hyperhdr_color(rgb: list[int], duration_ms: int = 0):
     response = requests.post(url, json=payload)
     response.raise_for_status()
     return response.json()
+
+
+def get_led_postion_data():
+    url = f"{base_url}/json-rpc"
+    payload = {
+        "command": "serverinfo"
+    }
+
+    response = requests.post(url, json=payload)
+    response.raise_for_status()
+    data = response.json()
+
+    leds = data.get('info', {}).get('leds')
+    
+    return leds
+
+async def get_led_stream():
+    uri = f"ws://{HOST}:{PORT}"
+    led_data = None
+    async with websockets.connect(uri) as ws:
+
+        # 1. Start LED colors stream
+        start_msg = {
+            "command": "ledcolors",
+            "subcommand": "ledstream-start",
+            "tan": TAN
+        }
+
+        await ws.send(json.dumps(start_msg))
+
+        try:
+            for _ in range(10):
+                msg = await ws.recv()
+                try:
+                    data = json.loads(msg)
+                    if data.get('command', '') == "ledcolors-ledstream-update":
+                        led_data = data  
+                        break
+                except json.JSONDecodeError:
+                    print("[Binary frame received]", type(msg), len(msg))
+
+        finally:
+            # 3. Stop LED colors stream
+            stop_msg = {
+                "command": "ledcolors",
+                "subcommand": "ledstream-stop",
+                "tan": TAN
+            }
+            await ws.send(json.dumps(stop_msg))
+
+            # 4. Close connection
+            await ws.close()
+        
+        return led_data
