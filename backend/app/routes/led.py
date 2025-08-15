@@ -1,3 +1,4 @@
+import math
 import asyncio
 from flask import Blueprint, jsonify, abort
 from flask import request
@@ -261,45 +262,73 @@ async def is_fallback():
         TOP_THRESHOLD = 0.05
         BOTTOM_THRESHOLD = 0.95
 
-        top_leds = [
-            led for led in led_position
-            if led["vmin"] <= TOP_THRESHOLD and 0.05 < led["hmin"] < 0.95
-        ]
+        top_leds = []
+        bottom_leds = []
 
-        bottom_leds = [
-            led for led in led_position
-            if led["vmax"] >= BOTTOM_THRESHOLD and 0.05 < led["hmin"] < 0.95
-        ]
+        for led in led_position:
+            if 0.05 < led["hmin"] < 0.95:
+                if led["vmin"] <= TOP_THRESHOLD:
+                    top_leds.append(led)
+                if led["vmax"] >= BOTTOM_THRESHOLD:
+                    bottom_leds.append(led)
 
-        is_same_dir = True
+        no_of_top_leds = len(top_leds)
+        no_of_bottom_leds = len(bottom_leds)
 
-        if top_leds[0]["color"] != bottom_leds[0]["color"]:
-            is_same_dir = False
+        # print({
+        #     "top": top_leds,
+        #     "bottom": bottom_leds
+        # })
+        
+        top_fallback_colors = {
+            (255, 255, 6): 0,   # Bright yellow (slightly greenish)
+            (255, 0, 255): 0,   # Pure magenta
+            (0, 10, 255): 0,    # Deep blue (slightly purplish)
+            (0, 255, 0): 0,     # Pure green
+            (6, 255, 255): 0,   # Cyan / aqua
+            (255, 11, 0): 0     # Bright red (slightly orange)
+        }
+        
+        bottom_fallback_colors = {
+            (255, 255, 6): 0,   # Bright yellow (slightly greenish)
+            (255, 0, 255): 0,   # Pure magenta
+            (0, 10, 255): 0,    # Deep blue (slightly purplish)
+            (0, 255, 0): 0,     # Pure green
+            (6, 255, 255): 0,   # Cyan / aqua
+            (255, 11, 0): 0     # Bright red (slightly orange)
+        }
 
-        loop_til = min(len(top_leds),len(bottom_leds))
+        loop_til = max(len(top_leds),len(bottom_leds))
 
-        def colors_equal(c1, c2, tolerance=5):
-            return all(abs(val1 - val2) <= tolerance for val1, val2 in zip(c1, c2))
-
-        unmatched_count = 0
-        for top_ind in range(loop_til):
-            bottom_ind = top_ind
-            if not is_same_dir:
-                bottom_ind = len(bottom_leds) - top_ind - 1 
+        for led_ind in range(loop_til):
+            if led_ind < len(top_leds):
+                curr_top_color = tuple(top_leds[led_ind]['color'])
+                if curr_top_color in top_fallback_colors:
+                    top_fallback_colors[curr_top_color] += 1 
             
-            top_color = top_leds[top_ind]["color"]
-            bottom_color = bottom_leds[bottom_ind]["color"]
+            if led_ind < len(bottom_leds):
+                curr_bottom_color = tuple(bottom_leds[led_ind]['color'])
+                if curr_bottom_color in bottom_fallback_colors:
+                    bottom_fallback_colors[curr_bottom_color] += 1
 
-            if top_color != bottom_color and not colors_equal(top_color,bottom_color):
-                # print(top_leds[top_ind]['led_ind'],"||",bottom_leds[bottom_ind]['led_ind'],top_color,"||",bottom_color)
-                unmatched_count += 1          
+        min_top_colors_freq = math.floor(no_of_top_leds * 0.09)
+        min_bottom_colors_freq = math.floor(no_of_bottom_leds * 0.09)
 
-        percenteage_matched = (loop_til - unmatched_count) / loop_til
+        are_these_top_colors_fallback = all([ freq >= min_top_colors_freq for _,freq in top_fallback_colors.items()])
+        are_these_bottom_colors_fallback = all([ freq >= min_bottom_colors_freq for _,freq in bottom_fallback_colors.items()])
+
+        # print(top_fallback_colors)
+        # print(f"{min_top_colors_freq}/{no_of_top_leds}")
+        # print(are_these_top_colors_fallback)
+        
+        # print(bottom_fallback_colors)
+        # print(f"{min_bottom_colors_freq}/{no_of_bottom_leds}")
+        # print(are_these_bottom_colors_fallback)
 
         return jsonify({
             "status": "success",
-            "data": percenteage_matched,
-            "message": "fetched is fallback percentage."
+            "data": { "is_fallback": are_these_bottom_colors_fallback and are_these_top_colors_fallback },
+            "message": "fetched fallback status successfully."
         }), 200
 
     except RequestException as e:
