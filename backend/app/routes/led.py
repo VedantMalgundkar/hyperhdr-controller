@@ -1,4 +1,3 @@
-import math
 import asyncio
 from flask import Blueprint, jsonify, abort
 from flask import request
@@ -16,6 +15,10 @@ from app.services.led_commands import (
     set_signal_detection,
     get_led_postion_data,
     get_led_stream,
+    check_top_bottom_led_for_fallback,
+    transform_flat_led_colors_for_each_led,
+    add_color_to_led_position_data,
+    get_leds_by_direction,
 )
 
 led_bp = Blueprint("led", __name__)
@@ -90,7 +93,7 @@ def get_effects():
         return jsonify({"status": "failed", "error": f"Unexpected error: {str(e)}"}), 500
 
 @led_bp.route("/apply-effect", methods=["POST"])
-def apply_effect():
+async def apply_effect():
     try:
         body = request.get_json()
         effect = body.get('effect')
@@ -98,7 +101,7 @@ def apply_effect():
         if effect is None:
             raise NotFound(description="Missing 'effect' in request body")
 
-        active_signal = check_input_signal()
+        active_signal = await check_input_signal()
 
         is_proto_running = 'proto' in active_signal.get("componentId","").lower()
 
@@ -149,7 +152,7 @@ def is_valid_rgb(color):
     )
 
 @led_bp.route("/apply-color", methods=["POST"])
-def apply_color():
+async def apply_color():
     try:
         body = request.get_json()
 
@@ -161,7 +164,7 @@ def apply_color():
         if not is_valid_rgb(color):
             raise BadRequest("Color must be 3 integers [0–255].")
 
-        active_signal = check_input_signal()
+        active_signal = await check_input_signal()
 
         is_proto_running = 'proto' in active_signal.get("componentId","").lower()
 
@@ -215,9 +218,9 @@ def stop_effect():
         return jsonify({"status": "failed", "error": f"Unexpected error: {str(e)}"}), 500
 
 @led_bp.route("/get-active-signal", methods=["GET"])
-def get_active_signal():
+async def get_active_signal():
     try:
-        res = check_input_signal()
+        res = await check_input_signal()
         
         return jsonify({
             "status": "success",
@@ -255,79 +258,21 @@ async def is_fallback():
 
         led_color = await get_led_stream()
         led_color = led_color.get("result",{}).get("leds",[])
-        led_color = [led_color[i:i+3] for i in range(0, len(led_color), 3)]
 
-        led_position = [{**each_position ,"color": led_color[index],"led_ind": index} for index,each_position in enumerate(led_position)]
+        led_color = transform_flat_led_colors_for_each_led(led_color)
+
+        led_position = add_color_to_led_position_data(led_position, led_color)
 
         TOP_THRESHOLD = 0.05
         BOTTOM_THRESHOLD = 0.95
 
-        top_leds = []
-        bottom_leds = []
+        result = get_leds_by_direction(led_position,TOP_THRESHOLD=TOP_THRESHOLD, BOTTOM_THRESHOLD = BOTTOM_THRESHOLD)
 
-        for led in led_position:
-            if 0.05 < led["hmin"] < 0.95:
-                if led["vmin"] <= TOP_THRESHOLD:
-                    top_leds.append(led)
-                if led["vmax"] >= BOTTOM_THRESHOLD:
-                    bottom_leds.append(led)
-
-        no_of_top_leds = len(top_leds)
-        no_of_bottom_leds = len(bottom_leds)
-
-        # print({
-        #     "top": top_leds,
-        #     "bottom": bottom_leds
-        # })
-        
-        top_fallback_colors = {
-            (255, 255, 6): 0,   # Bright yellow (slightly greenish)
-            (255, 0, 255): 0,   # Pure magenta
-            (0, 10, 255): 0,    # Deep blue (slightly purplish)
-            (0, 255, 0): 0,     # Pure green
-            (6, 255, 255): 0,   # Cyan / aqua
-            (255, 11, 0): 0     # Bright red (slightly orange)
-        }
-        
-        bottom_fallback_colors = {
-            (255, 255, 6): 0,   # Bright yellow (slightly greenish)
-            (255, 0, 255): 0,   # Pure magenta
-            (0, 10, 255): 0,    # Deep blue (slightly purplish)
-            (0, 255, 0): 0,     # Pure green
-            (6, 255, 255): 0,   # Cyan / aqua
-            (255, 11, 0): 0     # Bright red (slightly orange)
-        }
-
-        loop_til = max(len(top_leds),len(bottom_leds))
-
-        for led_ind in range(loop_til):
-            if led_ind < len(top_leds):
-                curr_top_color = tuple(top_leds[led_ind]['color'])
-                if curr_top_color in top_fallback_colors:
-                    top_fallback_colors[curr_top_color] += 1 
-            
-            if led_ind < len(bottom_leds):
-                curr_bottom_color = tuple(bottom_leds[led_ind]['color'])
-                if curr_bottom_color in bottom_fallback_colors:
-                    bottom_fallback_colors[curr_bottom_color] += 1
-
-        min_top_colors_freq = math.floor(no_of_top_leds * 0.09)
-        min_bottom_colors_freq = math.floor(no_of_bottom_leds * 0.09)
-
-        are_these_top_colors_fallback = all([ freq >= min_top_colors_freq for _,freq in top_fallback_colors.items()])
-        are_these_bottom_colors_fallback = all([ freq >= min_bottom_colors_freq for _,freq in bottom_fallback_colors.items()])
-
-        # print(top_fallback_colors)
-        # print(f"{min_top_colors_freq}/{no_of_top_leds}")
-        # print(are_these_top_colors_fallback)
-        
-        # print(bottom_fallback_colors)
-        # print(f"{min_bottom_colors_freq}/{no_of_bottom_leds}")
-        # print(are_these_bottom_colors_fallback)
+        is_it_fallback = check_top_bottom_led_for_fallback(result["top"], result["bottom"])
 
         return jsonify({
             "status": "success",
-            "data": { "is_fallback": are_these_bottom_colors_fallback and are_these_top_colors_fallback },
+            "data": { "is_fallback": is_it_fallback },
             "message": "fetched fallback status successfully."
         }), 200
 

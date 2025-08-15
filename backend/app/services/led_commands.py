@@ -1,3 +1,4 @@
+import math
 import json
 import asyncio
 import requests
@@ -160,12 +161,11 @@ def apply_hyperhdr_effect(effect_name: str, duration_ms: int = 0):
     response.raise_for_status()
     return response.json()
 
-def check_input_signal():
+async def check_input_signal():
     url = f"{base_url}/json-rpc"
     payload = {
         "command": "serverinfo"
     }
-
     response = requests.post(url, json=payload)
     response.raise_for_status()
     data = response.json()
@@ -173,6 +173,22 @@ def check_input_signal():
     priorities = data.get('info', {}).get('priorities')
     if not priorities:
         return {"status": "failed", error: "priorities are missing in serverinfo"}
+    
+    is_it_fallback = True
+    
+    any_other_active_source = any(["usb" not in priority.get("owner","").lower() and priority["visible"] for priority in priorities])
+
+    if not any_other_active_source:
+        led_position = get_led_postion_data()
+        led_color = await get_led_stream()    
+        led_color = led_color.get("result",{}).get("leds",[])
+        led_color = transform_flat_led_colors_for_each_led(led_color)
+        led_position = add_color_to_led_position_data(led_position, led_color)
+        TOP_THRESHOLD = 0.05
+        BOTTOM_THRESHOLD = 0.95
+        result = get_leds_by_direction(led_position,TOP_THRESHOLD=TOP_THRESHOLD, BOTTOM_THRESHOLD = BOTTOM_THRESHOLD)
+        is_it_fallback = check_top_bottom_led_for_fallback(result["top"], result["bottom"])
+
 
     current_input = {}
     valid_effects = [effect["name"] for effect in get_hyperhdr_effects()]
@@ -180,9 +196,10 @@ def check_input_signal():
     for priority in priorities:
         usb_owner = "usb" in priority.get("owner","").lower()
         is_valid_effect = priority.get("owner","") in valid_effects
-        
-        if priority["visible"] and not usb_owner:
+
+        if priority["visible"]:
             current_input = { **priority, "value": priority.get("owner","") } if is_valid_effect else priority
+            current_input = { **priority, "is_it_fallback": is_it_fallback } if usb_owner else priority
             break
 
     return current_input
@@ -261,6 +278,105 @@ def get_led_postion_data():
     leds = data.get('info', {}).get('leds')
     
     return leds
+
+def check_top_bottom_led_for_fallback(top_leds, bottom_leds):
+    no_of_top_leds = len(top_leds)
+    no_of_bottom_leds = len(bottom_leds)
+
+    # print({
+    #     "top": top_leds,
+    #     "bottom": bottom_leds
+    # })
+    
+    top_fallback_colors = {
+        (255, 255, 6): 0,   # Bright yellow (slightly greenish)
+        (255, 0, 255): 0,   # Pure magenta
+        (0, 10, 255): 0,    # Deep blue (slightly purplish)
+        (0, 255, 0): 0,     # Pure green
+        (6, 255, 255): 0,   # Cyan / aqua
+        (255, 11, 0): 0     # Bright red (slightly orange)
+    }
+    
+    bottom_fallback_colors = {
+        (255, 255, 6): 0,   # Bright yellow (slightly greenish)
+        (255, 0, 255): 0,   # Pure magenta
+        (0, 10, 255): 0,    # Deep blue (slightly purplish)
+        (0, 255, 0): 0,     # Pure green
+        (6, 255, 255): 0,   # Cyan / aqua
+        (255, 11, 0): 0     # Bright red (slightly orange)
+    }
+
+    loop_til = max(len(top_leds),len(bottom_leds))
+
+    for led_ind in range(loop_til):
+        if led_ind < len(top_leds):
+            curr_top_color = tuple(top_leds[led_ind]['color'])
+            if curr_top_color in top_fallback_colors:
+                top_fallback_colors[curr_top_color] += 1 
+        
+        if led_ind < len(bottom_leds):
+            curr_bottom_color = tuple(bottom_leds[led_ind]['color'])
+            if curr_bottom_color in bottom_fallback_colors:
+                bottom_fallback_colors[curr_bottom_color] += 1
+
+    min_top_colors_freq = math.floor(no_of_top_leds * 0.09)
+    min_bottom_colors_freq = math.floor(no_of_bottom_leds * 0.09)
+
+    are_these_top_colors_fallback = all([ freq >= min_top_colors_freq for _,freq in top_fallback_colors.items()])
+    are_these_bottom_colors_fallback = all([ freq >= min_bottom_colors_freq for _,freq in bottom_fallback_colors.items()])
+
+    # print(top_fallback_colors)
+    # print(f"{min_top_colors_freq}/{no_of_top_leds}")
+    # print(are_these_top_colors_fallback)
+    
+    # print(bottom_fallback_colors)
+    # print(f"{min_bottom_colors_freq}/{no_of_bottom_leds}")
+    # print(are_these_bottom_colors_fallback)
+    return are_these_bottom_colors_fallback and are_these_top_colors_fallback
+
+def transform_flat_led_colors_for_each_led(led_color):
+    return [led_color[i:i+3] for i in range(0, len(led_color), 3)]
+
+def add_color_to_led_position_data(led_position,led_color):
+    return [{**each_position ,"color": led_color[index],"led_ind": index} for index,each_position in enumerate(led_position)]
+
+def get_leds_by_direction(
+    led_position,
+    TOP_THRESHOLD=0.05,
+    BOTTOM_THRESHOLD=0.95,
+    LEFT_THRESHOLD=0.05,
+    RIGHT_THRESHOLD=0.95
+):
+    top_leds = []
+    bottom_leds = []
+    left_leds = []
+    right_leds = []
+
+    for led in led_position:
+        # Top
+        if 0.05 < led["hmin"] < 0.95 and led["vmin"] <= TOP_THRESHOLD:
+            top_leds.append(led)
+
+        # Bottom
+        if 0.05 < led["hmin"] < 0.95 and led["vmax"] >= BOTTOM_THRESHOLD:
+            bottom_leds.append(led)
+
+        # Left
+        if 0.05 < led["vmin"] < 0.95 and led["hmin"] <= LEFT_THRESHOLD:
+            left_leds.append(led)
+
+        # Right
+        if 0.05 < led["vmin"] < 0.95 and led["hmax"] >= RIGHT_THRESHOLD:
+            right_leds.append(led)
+
+    mapping = {
+        "top": top_leds,
+        "bottom": bottom_leds,
+        "left": left_leds,
+        "right": right_leds
+    }
+
+    return mapping
 
 async def get_led_stream():
     uri = f"ws://{HOST}:{PORT}"
