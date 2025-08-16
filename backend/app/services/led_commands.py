@@ -199,7 +199,7 @@ async def check_input_signal():
 
         if priority["visible"]:
             current_input = { **priority, "value": priority.get("owner","") } if is_valid_effect else priority
-            current_input = { **priority, "is_it_fallback": is_it_fallback } if usb_owner else priority
+            current_input = { **current_input, "is_it_fallback": is_it_fallback } if usb_owner else current_input
             break
 
     return current_input
